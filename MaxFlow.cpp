@@ -108,14 +108,14 @@ void Graph::addEdge(int u, int v, int capacity)
     if (! (index==-1))
     {
         // means u->v in adj list for u
-        cout << "Index!=-1 there is "<< u << "->" <<v<< " in adj list for "<< u << endl;
+//        cout << "Index!=-1 there is "<< u << "->" <<v<< " in adj list for "<< u << endl;
         adj[u][index].capacity += capacity;
         index = findEdge(v, u);
         adj[v][index].capacity += 0;
     }
     else
     {
-        cout << "Index==-1 there is no "<< u << "->" <<v<< " in adj list for "<< u << endl;
+//        cout << "Index==-1 there is no "<< u << "->" <<v<< " in adj list for "<< u << endl;
         adj[u].push_back(Edge(0, capacity, u, v));
         adj[v].push_back(Edge(0, 0, v, u));
     }
@@ -142,17 +142,17 @@ void Graph::preprocess(int s)
         // Initialize excess flow for adjacent v
         ver[endV.name].e_flow += flow;
         active.push(&ver[endV.name]);
-        cout << "Push in \"active\" node " << ver[endV.name].name << " with excess " << active.back()->e_flow << endl;
+//        cout << "Push in \"active\" node " << ver[endV.name].name << " with excess " << active.back()->e_flow << endl;
 
         addEdge(endV.name, s, flow);
     }
-    PrintCondition();
+//    PrintCondition();
 }
 
 // Update reverse flow for flow added on ith Edge for u
 void Graph::updateReverseEdgeFlow(int uAdj, int i, int flow)
 {
-    cout << "Update reverse for " << uAdj << "-->" << adj[uAdj][i].v << "with flow " << flow << endl;
+//    cout << "Update reverse for " << uAdj << "-->" << adj[uAdj][i].v << "with flow " << flow << endl;
     int u = adj[uAdj][i].v, v = uAdj;
 
     for (int j = 0; j < adj[u].size(); j++)
@@ -171,7 +171,7 @@ void Graph::updateReverseEdgeFlow(int uAdj, int i, int flow)
 // To push flow from overflowing vertex u
 bool Graph::push(int u)
 {
-    cout << "push for << " << u << endl;
+//    cout << "push for << " << u << endl;
     // Traverse through all edges to find an adjacent (of u)
     // to which flow can be pushed
     for (int i = 0; i < adj[u].size(); i++)
@@ -205,7 +205,7 @@ bool Graph::push(int u)
                 if (!ver[adj[u][i].v].e_flow-flow)
                 {
                     active.push(&ver[adj[u][i].v]);
-                    cout << "Push in \"active\" node " << adj[u][i].v << " with excess " << active.back()->e_flow << endl;
+//                    cout << "Push in \"active\" node " << adj[u][i].v << " with excess " << active.back()->e_flow << endl;
                 }
             }
 
@@ -214,7 +214,7 @@ bool Graph::push(int u)
             // flow)
             adj[u][i].capacity -= flow;
 
-            cout << "PUSH " << u <<"-->" << adj[u][i].v << ": " << flow << endl;
+//            cout << "PUSH " << u <<"-->" << adj[u][i].v << ": " << flow << endl;
 
             updateReverseEdgeFlow(u, i, flow);
 //                PrintCondition();
@@ -228,13 +228,13 @@ bool Graph::push(int u)
 // function to relabel vertex u
 void Graph::relabel(int u)
 {
-    cout << "\n RELABEL\n";
+//    cout << "\n RELABEL\n";
     // Initialize minimum height of an adjacent
     int mh = INT_MAX;
 
     // Pop the vertex from the queue
 
-    cout << "Pop from \"active\" node " << active.front()->name << " with excess " << active.front()->e_flow << endl;
+//    cout << "Pop from \"active\" node " << active.front()->name << " with excess " << active.front()->e_flow << endl;
     active.pop();
 
     // Find the adjacent with minimum height
@@ -260,15 +260,15 @@ void Graph::relabel(int u)
 
     active.push(&ver[u]);
 
-    cout << "Push in \"active\" node " << ver[u].name << " with excess " << active.back()->e_flow << endl;
-    PrintCondition();
+//    cout << "Push in \"active\" node " << ver[u].name << " with excess " << active.back()->e_flow << endl;
+//    PrintCondition();
 }
 
 void Graph::globalRelabeling()
 {
     int terminal = ver[ver.size()-1].name;
 //    int terminal = 1;
-    cout << "terminal " << terminal << endl;
+//    cout << "terminal " << terminal << endl;
     vector <bool> visited(V, 0);
     vector <int> distance(V, 0);
 
@@ -281,7 +281,7 @@ void Graph::globalRelabeling()
     {
         int u = q.front();
         q.pop();
-        cout << "from " << u << ": ";
+//        cout << "from " << u << ": ";
 
         for (int i=0; i<adj[u].size(); ++i)
         {
@@ -291,19 +291,19 @@ void Graph::globalRelabeling()
                 distance[adj[u][i].v] = distance[u] + 1;
                 q.push(adj[u][i].v);
                 visited[adj[u][i].v] = true;
-                cout << " " << adj[u][i].v << "-h" << distance[adj[u][i].v] << " ";
+//                cout << " " << adj[u][i].v << "-h" << distance[adj[u][i].v] << " ";
             }
         }
-        cout << endl;
+//        cout << endl;
     }
 
     // Do not change height for sink and source
     for (int i=1; i<ver.size()-1; ++i)
     {
         ver[i].h = distance[i];
-        cout << "distance["<< i << "]=" << distance[i] << "\n";
+//        cout << "distance["<< i << "]=" << distance[i] << "\n";
     }
-    cout << endl;
+//    cout << endl;
 }
 
 // main function for printing maximum flow of graph
@@ -319,13 +319,13 @@ int Graph::getMaxFlow(int s)
         {
             if (countGB%(3*V) || countGB==0)
             {
-                cout << "No gb\n";
+//                cout << "No gb\n";
                 relabel(u);
                 countGB += 1;
             }
             else
             {
-                cout << "else Gb=" << countGB << endl;
+//                cout << "else Gb=" << countGB << endl;
                 globalRelabeling();
                 countGB += 1;
             }
@@ -355,9 +355,8 @@ void Graph::PrintCondition()
 // Driver program to test above functions
 int main()
 {
-    int V = 6;
-//    int V = 4;
-//    int V = 4;
+//    int V = 6;
+    int V = 4;
     Graph g(V);
 
 
@@ -368,23 +367,23 @@ int main()
 //    g.addEdge(1, 3, 10000);
 
 //    // Creating above shown flow network
-    g.addEdge(0, 1, 16);
-    g.addEdge(0, 2, 13);
-    g.addEdge(1, 2, 10);
-    g.addEdge(2, 1, 4);
-    g.addEdge(1, 3, 12);
-    g.addEdge(2, 4, 14);
-    g.addEdge(3, 2, 9);
-    g.addEdge(3, 5, 20);
-    g.addEdge(4, 3, 7);
-    g.addEdge(4, 5, 4);
+//    g.addEdge(0, 1, 16);
+//    g.addEdge(0, 2, 13);
+//    g.addEdge(1, 2, 10);
+//    g.addEdge(2, 1, 4);
+//    g.addEdge(1, 3, 12);
+//    g.addEdge(2, 4, 14);
+//    g.addEdge(3, 2, 9);
+//    g.addEdge(3, 5, 20);
+//    g.addEdge(4, 3, 7);
+//    g.addEdge(4, 5, 4);
 
 
-//    g.addEdge(0, 1, 10);
-//    g.addEdge(0, 2, 10);
-//    g.addEdge(1, 3, 8);
-//    g.addEdge(2, 3, 5);
-//    g.addEdge(1, 2, 5);
+    g.addEdge(0, 1, 2);
+    g.addEdge(0, 2, 4);
+    g.addEdge(1, 3, 1);
+    g.addEdge(2, 3, 5);
+    g.addEdge(1, 2, 3);
 
     // Initialize source
     int s = 0;
