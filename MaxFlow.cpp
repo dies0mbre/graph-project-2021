@@ -4,7 +4,9 @@
 #include <climits>
 #include <iostream>
 #include <queue>
+#include <chrono>
 using namespace std;
+using namespace std::chrono;
 
 struct Edge
 {
@@ -68,7 +70,7 @@ public:
     // Return number in adj[u] for edge u->v
     int findEdge(int u, int v);
 
-    void globalRelabeling();
+    bool globalRelabeling();
 
     // returns maximum flow from s to t
     int getMaxFlow(int s);
@@ -217,11 +219,11 @@ bool Graph::push(int u)
 //            cout << "PUSH " << u <<"-->" << adj[u][i].v << ": " << flow << endl;
 
             updateReverseEdgeFlow(u, i, flow);
-//                PrintCondition();
+            PrintCondition();
             return true;
         }
     }
-//    PrintCondition();
+    PrintCondition();
     return false;
 }
 
@@ -264,46 +266,93 @@ void Graph::relabel(int u)
 //    PrintCondition();
 }
 
-void Graph::globalRelabeling()
+bool Graph::globalRelabeling()
 {
-    int terminal = ver[ver.size()-1].name;
-//    int terminal = 1;
+    int terminal = ver.size()-1;
+    int source = 0;
 //    cout << "terminal " << terminal << endl;
     vector <bool> visited(V, 0);
-    vector <int> distance(V, 0);
+    vector <int> distanceFromSink(V, 0);
+    vector <int> distanceFromSource(V, 0);
 
     queue <int> q;
     q.push(terminal);
     visited[terminal] = true;
-    distance[terminal] = 0;
+    distanceFromSink[terminal] = 0;
 
+    // First BFS - from sink
     while (!q.empty())
     {
         int u = q.front();
         q.pop();
-//        cout << "from " << u << ": ";
+        cout << "from " << u << ": ";
 
         for (int i=0; i<adj[u].size(); ++i)
         {
             // If the edge presents in residual graph
             if (adj[u][i].capacity != 0 && visited[adj[u][i].v]==false)
             {
-                distance[adj[u][i].v] = distance[u] + 1;
+                distanceFromSink[adj[u][i].v] = distanceFromSink[u] + 1;
                 q.push(adj[u][i].v);
                 visited[adj[u][i].v] = true;
-//                cout << " " << adj[u][i].v << "-h" << distance[adj[u][i].v] << " ";
+                cout << " " << adj[u][i].v << "-h" << distanceFromSink[adj[u][i].v] << " ";
             }
         }
-//        cout << endl;
+        cout << endl;
     }
 
+    for (int i=1; i<V; ++i)
+        visited[i] = false;
+
+    q.push(source);
+    visited[source] = true;
+    distanceFromSource[source] = 0;
+
+//     Second BFS - from source
+    while (!q.empty())
+    {
+        int u = q.front();
+        q.pop();
+        cout << "from " << u << ": ";
+
+        for (int i=0; i<adj[u].size(); ++i)
+        {
+            // If the edge presents in residual graph
+            if (adj[u][i].capacity != 0 && visited[adj[u][i].v]==false)
+            {
+                distanceFromSource[adj[u][i].v] = distanceFromSource[u] + 1;
+                q.push(adj[u][i].v);
+                visited[adj[u][i].v] = true;
+                cout << " " << adj[u][i].v << "-h" << distanceFromSource[adj[u][i].v] << " ";
+            }
+        }
+        cout << endl;
+    }
+
+    int flagSink = true;
+    int flagSource = true;
+
     // Do not change height for sink and source
+    // Change height to distance only if d>=height
     for (int i=1; i<ver.size()-1; ++i)
     {
-        ver[i].h = distance[i];
-//        cout << "distance["<< i << "]=" << distance[i] << "\n";
+        if (distanceFromSink[i] < ver[i].h) flagSink = false;
+        if (distanceFromSource[i] < ver[i].h) flagSource = false;
     }
-//    cout << endl;
+
+    // If all distances (from sink or from source) > heights, then change with max
+    if (flagSink || flagSource)
+    {
+        for (int i=1; i<ver.size()-1; ++i)
+        {
+            ver[i].h = distanceFromSink[i] >= distanceFromSource[i] ? distanceFromSink[i] : distanceFromSource[i];
+            cout << "distanceFromSink["<< i << "]=" << distanceFromSink[i] << ", distanceFromSource["<< i << "]=" << distanceFromSource[i] << "\n";
+        }
+        cout << endl;
+        return true;
+    }
+    else
+        return false;
 }
 
 // main function for printing maximum flow of graph
@@ -317,16 +366,17 @@ int Graph::getMaxFlow(int s)
         int u = active.front()->name;
         if (!push(u))
         {
-            if (countGB%(3*V) || countGB==0)
+            if (countGB%V || countGB==0) //countGB%(3*V)
             {
-//                cout << "No gb\n";
+                cout << "No gb\n";
                 relabel(u);
                 countGB += 1;
             }
             else
             {
-//                cout << "else Gb=" << countGB << endl;
-                globalRelabeling();
+                cout << "else Gb=" << countGB << endl;
+                if (!globalRelabeling());
+                relabel(u);
                 countGB += 1;
             }
         }
@@ -355,8 +405,8 @@ void Graph::PrintCondition()
 // Driver program to test above functions
 int main()
 {
-//    int V = 6;
-    int V = 4;
+    int V = 6;
+//    int V = 4;
     Graph g(V);
 
 
@@ -367,28 +417,37 @@ int main()
 //    g.addEdge(1, 3, 10000);
 
 //    // Creating above shown flow network
-//    g.addEdge(0, 1, 16);
-//    g.addEdge(0, 2, 13);
-//    g.addEdge(1, 2, 10);
-//    g.addEdge(2, 1, 4);
-//    g.addEdge(1, 3, 12);
-//    g.addEdge(2, 4, 14);
-//    g.addEdge(3, 2, 9);
-//    g.addEdge(3, 5, 20);
-//    g.addEdge(4, 3, 7);
-//    g.addEdge(4, 5, 4);
+    g.addEdge(0, 1, 16);
+    g.addEdge(0, 2, 13);
+    g.addEdge(1, 2, 10);
+    g.addEdge(2, 1, 4);
+    g.addEdge(1, 3, 12);
+    g.addEdge(2, 4, 14);
+    g.addEdge(3, 2, 9);
+    g.addEdge(3, 5, 20);
+    g.addEdge(4, 3, 7);
+    g.addEdge(4, 5, 4);
 
 
-    g.addEdge(0, 1, 2);
-    g.addEdge(0, 2, 4);
-    g.addEdge(1, 3, 1);
-    g.addEdge(2, 3, 5);
-    g.addEdge(1, 2, 3);
+//    g.addEdge(0, 1, 2);
+//    g.addEdge(0, 2, 4);
+//    g.addEdge(1, 3, 1);
+//    g.addEdge(2, 3, 5);
+//    g.addEdge(1, 2, 3);
 
     // Initialize source
     int s = 0;
 
-// << "Maximum flow is "
+    cout << "Maximum flow is ";
+    auto start =  chrono::high_resolution_clock::now();
     cout << g.getMaxFlow(s);
+    auto end = chrono::high_resolution_clock::now();
+    double time_taken =
+            chrono::duration_cast<chrono::nanoseconds>(end - start).count();
+
+    time_taken *= 1e-9;
+    cout << "\nTime taken by function: " << fixed << time_taken << " seconds" << endl;
+
+
     return 0;
 }
