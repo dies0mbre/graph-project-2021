@@ -93,6 +93,7 @@ void Graph::preflow(int s)
     // Making h of source Vertex equal to no. of vertices
     // Height of other vertices is 0.
     ver[s].h = ver.size();
+    int flow;
 
     //
     for (int i = 0; i < edge.size(); i++)
@@ -100,8 +101,10 @@ void Graph::preflow(int s)
         // If current edge goes from source
         if (edge[i].u == s)
         {
-            // Flow is equal to capacity
-            edge[i].flow = edge[i].capacity;
+            flow = edge[i].capacity;
+            // Residual capacity is 0
+            edge[i].flow = flow;
+            edge[i].capacity = 0; // equal to not having this edge in residual
 
             // Initialize excess flow for adjacent v
             ver[edge[i].v].e_flow += edge[i].flow;
@@ -109,8 +112,8 @@ void Graph::preflow(int s)
             cout << "Push in \"active\" node " << edge[i].v << " with excess " << active.back()->e_flow << endl;
 
             // Add an edge from v to s in residual graph with
-            // capacity equal to 0
-            edge.push_back(Edge(-edge[i].flow, 0, edge[i].v, s));
+            // capacity equal to flow
+            edge.push_back(Edge(0, edge[i].flow, edge[i].v, s));
         }
     }
 }
@@ -124,7 +127,7 @@ void Graph::updateReverseEdgeFlow(int i, int flow)
     {
         if (edge[j].v == v && edge[j].u == u)
         {
-            edge[j].flow -= flow;
+            edge[j].capacity += flow;
             return;
         }
     }
@@ -145,9 +148,8 @@ bool Graph::push(int u)
         // overflowing vertex
         if (edge[i].u == u)
         {
-            // if flow is equal to capacity then no push
-            // is possible
-            if (edge[i].flow == edge[i].capacity)
+            // if capacity==0 then no flow can be pushed
+            if (edge[i].capacity == 0)
                 continue;
 
             // Push is only possible if height of adjacent
@@ -155,18 +157,12 @@ bool Graph::push(int u)
             if (ver[u].h > ver[edge[i].v].h && ver[u].e_flow>0)
             {
                 // Flow to be pushed is equal to minimum of
-                // remaining flow on edge and excess flow.
-                int flow = min(edge[i].capacity - edge[i].flow,
+                // residual capacity of edge and excess flow.
+                int flow = min(edge[i].capacity,
                                ver[u].e_flow);
 
                 // Reduce excess flow for overflowing vertex
                 ver[u].e_flow -= flow;
-                // If excess in u is equal to 0
-//                if (! ver[u].e_flow)
-//                {
-//                    cout << "Pop from \"active\" node " << u << " with excess " << active.front()->e_flow << endl;
-//                    active.pop();
-//                }
 
                 // Increase excess flow for adjacent
                 ver[edge[i].v].e_flow += flow;
@@ -185,7 +181,7 @@ bool Graph::push(int u)
 
                 // Add residual flow (With capacity 0 and negative
                 // flow)
-                edge[i].flow += flow;
+                edge[i].capacity -= flow;
 
                 cout << "PUSH " << u <<"-->" << edge[i].v << ": " << flow << endl;
 
@@ -267,7 +263,7 @@ void Graph::PrintCondition()
     for (int i=0; i<edge.size(); ++i)
     {
         cout << "Edge " << edge[i].u << "-->" << edge[i].v << ", " << edge[i].flow << "/"
-        << edge[i].capacity << "\n";
+             << edge[i].capacity << "\n";
     }
     cout << "\n\n";
 }
@@ -276,29 +272,29 @@ void Graph::PrintCondition()
 // Driver program to test above functions
 int main()
 {
-//    int V = 6;
+    int V = 6;
 //    int V = 4;
-    int V = 4;
+//    int V = 4;
     Graph g(V);
 
 
-    g.addEdge(0, 1, 10000);
-    g.addEdge(0, 2, 10000);
-    g.addEdge(1, 2, 1);
-    g.addEdge(2, 3, 10000);
-    g.addEdge(1, 3, 10000);
+//    g.addEdge(0, 1, 10000);
+//    g.addEdge(0, 2, 10000);
+//    g.addEdge(1, 2, 1);
+//    g.addEdge(2, 3, 10000);
+//    g.addEdge(1, 3, 10000);
 
 //    // Creating above shown flow network
-//    g.addEdge(0, 1, 16);
-//    g.addEdge(0, 2, 13);
-//    g.addEdge(1, 2, 10);
-//    g.addEdge(2, 1, 4);
-//    g.addEdge(1, 3, 12);
-//    g.addEdge(2, 4, 14);
-//    g.addEdge(3, 2, 9);
-//    g.addEdge(3, 5, 20);
-//    g.addEdge(4, 3, 7);
-//    g.addEdge(4, 5, 4);
+    g.addEdge(0, 1, 16);
+    g.addEdge(0, 2, 13);
+    g.addEdge(1, 2, 10);
+    g.addEdge(2, 1, 4);
+    g.addEdge(1, 3, 12);
+    g.addEdge(2, 4, 14);
+    g.addEdge(3, 2, 9);
+    g.addEdge(3, 5, 20);
+    g.addEdge(4, 3, 7);
+    g.addEdge(4, 5, 4);
 
 
 //    g.addEdge(0, 1, 10);
