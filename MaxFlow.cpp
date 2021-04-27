@@ -44,6 +44,8 @@ class Graph
     int V; // No. of vertices
     vector<Vertex> ver;
     vector<Edge> edge;
+    // adjacency list of residual graph
+    vector< vector<Edge> > adj;
 
     queue <Vertex*> active;
 
@@ -54,17 +56,19 @@ class Graph
     void relabel(int u);
 
     // This function is called to initialize
-    // preflow
-    void preflow(int s);
+    // preprocess
+    void preprocess(int s);
 
     // Function to reverse edge
-    void updateReverseEdgeFlow(int i, int flow);
+    void updateReverseEdgeFlow(int uAdj, int i, int flow);
 
 public:
     Graph(int V); // Constructor
 
     // function to add an edge to graph
     void addEdge(int u, int v, int w);
+    // Return number in adj[u] for edge u->v
+    int findEdge(int u, int v);
 
     // returns maximum flow from s to t
     int getMaxFlow(int s, int t);
@@ -78,117 +82,149 @@ Graph::Graph(int V)
 
     // all vertices are initialized with 0 height
     // and 0 excess flow
-    for (int i = 0; i < V; i++)
+    for (int i = 0; i < V; i++){
         ver.push_back(Vertex(i, 0, 0));
+        adj.push_back(vector<Edge>());
+    }
+}
+
+int Graph::findEdge(int u, int v)
+{
+    for (int i=0; i<adj[u].size(); ++i)
+    {
+        if (adj[u][i].v == v)
+        {
+            return i;
+        }
+    }
+    return -1;
 }
 
 void Graph::addEdge(int u, int v, int capacity)
 {
     // flow is initialized with 0 for all edge
-    edge.push_back(Edge(0, capacity, u, v));
+//    edge.push_back(Edge(0, capacity, u, v));
+
+    int index = findEdge(u, v);
+    if (! (index==-1))
+    {
+        // means u->v in adj list for u
+        cout << "Index!=-1 there is "<< u << "->" <<v<< " in adj list for "<< u << endl;
+        adj[u][index].capacity += capacity;
+        index = findEdge(v, u);
+        adj[v][index].capacity += 0;
+    }
+    else
+    {
+        cout << "Index==-1 there is no "<< u << "->" <<v<< " in adj list for "<< u << endl;
+        adj[u].push_back(Edge(0, capacity, u, v));
+        adj[v].push_back(Edge(0, 0, v, u));
+    }
 }
 
-void Graph::preflow(int s)
+void Graph::preprocess(int s)
 {
     // Making h of source Vertex equal to no. of vertices
     // Height of other vertices is 0.
     ver[s].h = ver.size();
     int flow;
+    Vertex endV(0,0,0);
 
     //
-    for (int i = 0; i < edge.size(); i++)
+    for (int i = 0; i < adj[s].size(); i++)
     {
-        // If current edge goes from source
-        if (edge[i].u == s)
-        {
-            flow = edge[i].capacity;
-            // Residual capacity is 0
-            edge[i].flow = flow;
-            edge[i].capacity = 0; // equal to not having this edge in residual
+        endV = ver[adj[s][i].v];
 
-            // Initialize excess flow for adjacent v
-            ver[edge[i].v].e_flow += edge[i].flow;
-            active.push(&ver[edge[i].v]);
-            cout << "Push in \"active\" node " << edge[i].v << " with excess " << active.back()->e_flow << endl;
+        flow = adj[s][i].capacity;
+        // Residual capacity is 0
+        adj[s][i].flow = 0;
+        adj[s][i].capacity = 0; // equal to not having this edge in residual
 
-            // Add an edge from v to s in residual graph with
-            // capacity equal to flow
-            edge.push_back(Edge(0, edge[i].flow, edge[i].v, s));
-        }
+        // Initialize excess flow for adjacent v
+        ver[endV.name].e_flow += flow;
+        active.push(&ver[endV.name]);
+        cout << "Push in \"active\" node " << ver[endV.name].name << " with excess " << active.back()->e_flow << endl;
+
+        addEdge(endV.name, s, flow);
+//        edge.push_back(Edge(0, adj[s][i].flow, edge[i].v, s));
     }
+    PrintCondition();
 }
 
-// Update reverse flow for flow added on ith Edge
-void Graph::updateReverseEdgeFlow(int i, int flow)
+// Update reverse flow for flow added on ith Edge for u
+void Graph::updateReverseEdgeFlow(int uAdj, int i, int flow)
 {
-    int u = edge[i].v, v = edge[i].u;
+    cout << "Update reverse for " << uAdj << "-->" << adj[uAdj][i].v << "with flow " << flow << endl;
+    int u = adj[uAdj][i].v, v = uAdj;
 
-    for (int j = 0; j < edge.size(); j++)
+    for (int j = 0; j < adj[u].size(); j++)
     {
-        if (edge[j].v == v && edge[j].u == u)
+        if (adj[u][j].v == v)
         {
-            edge[j].capacity += flow;
+            adj[u][j].capacity += flow;
             return;
         }
     }
 
     // adding reverse Edge in residual graph
-    Edge e = Edge(0, flow, u, v);
-    edge.push_back(e);
+    addEdge(u, v, flow);
+//    Edge e = Edge(0, flow, u, v);
+//    edge.push_back(e);
 }
 
 // To push flow from overflowing vertex u
 bool Graph::push(int u)
 {
+    cout << "push for << " << u << endl;
     // Traverse through all edges to find an adjacent (of u)
     // to which flow can be pushed
-    for (int i = 0; i < edge.size(); i++)
+    for (int i = 0; i < adj[u].size(); i++)
     {
-        // Checks u of current edge is same as given
-        // overflowing vertex
-        if (edge[i].u == u)
+        // if capacity==0 then no flow can be pushed
+        if (adj[u][i].capacity == 0)
+            continue;
+
+        // Push is only possible if height of adjacent
+        // is smaller than height of overflowing vertex
+        if (ver[u].h > ver[adj[u][i].v].h && ver[u].e_flow>0)
         {
-            // if capacity==0 then no flow can be pushed
-            if (edge[i].capacity == 0)
-                continue;
 
-            // Push is only possible if height of adjacent
-            // is smaller than height of overflowing vertex
-            if (ver[u].h > ver[edge[i].v].h && ver[u].e_flow>0)
+            // Flow to be pushed is equal to minimum of
+            // residual capacity of edge and excess flow.
+            int flow = min(adj[u][i].capacity,
+                           ver[u].e_flow);
+//            cout << "flow " << flow << endl;
+
+
+            // Reduce excess flow for overflowing vertex
+            ver[u].e_flow -= flow;
+
+            // Increase excess flow for adjacent
+            ver[adj[u][i].v].e_flow += flow;
+
+//            cout << "push from " << u << "-->" << adj[i][i].v << endl;
+
+            // If v!= source and !=sink
+            if (adj[u][i].v && adj[u][i].v!=ver.back().name)
             {
-                // Flow to be pushed is equal to minimum of
-                // residual capacity of edge and excess flow.
-                int flow = min(edge[i].capacity,
-                               ver[u].e_flow);
-
-                // Reduce excess flow for overflowing vertex
-                ver[u].e_flow -= flow;
-
-                // Increase excess flow for adjacent
-                ver[edge[i].v].e_flow += flow;
-
-                // If v!= source and !=sink
-                if (edge[i].v && edge[i].v!=ver.back().name)
+                // and if excess in v was 0, then add in active
+                if (!ver[adj[u][i].v].e_flow-flow)
                 {
-                    // and if excess in v was 0, then add in active
-                    if (!ver[edge[i].v].e_flow-flow)
-                    {
-                        active.push(&ver[edge[i].v]);
-                        cout << "Push in \"active\" node " << edge[i].v << " with excess " << active.back()->e_flow << endl;
-                    }
+                    active.push(&ver[adj[u][i].v]);
+                    cout << "Push in \"active\" node " << adj[u][i].v << " with excess " << active.back()->e_flow << endl;
                 }
-
-
-                // Add residual flow (With capacity 0 and negative
-                // flow)
-                edge[i].capacity -= flow;
-
-                cout << "PUSH " << u <<"-->" << edge[i].v << ": " << flow << endl;
-
-                updateReverseEdgeFlow(i, flow);
-//                PrintCondition();
-                return true;
             }
+
+
+            // Add residual flow (With capacity 0 and negative
+            // flow)
+            adj[u][i].capacity -= flow;
+
+            cout << "PUSH " << u <<"-->" << adj[u][i].v << ": " << flow << endl;
+
+            updateReverseEdgeFlow(u, i, flow);
+//                PrintCondition();
+            return true;
         }
     }
 //    PrintCondition();
@@ -208,23 +244,20 @@ void Graph::relabel(int u)
     active.pop();
 
     // Find the adjacent with minimum height
-    for (int i = 0; i < edge.size(); i++)
+    for (int i = 0; i < adj[u].size(); i++)
     {
-        if (edge[i].u == u)
+        // if flow is equal to capacity then no
+        // relabeling
+        if (adj[u][i].capacity == 0)
+            continue;
+
+        // Update minimum height
+        if (ver[adj[u][i].v].h < mh)
         {
-            // if flow is equal to capacity then no
-            // relabeling
-            if (edge[i].flow == edge[i].capacity)
-                continue;
+            mh = ver[adj[u][i].v].h;
 
-            // Update minimum height
-            if (ver[edge[i].v].h < mh)
-            {
-                mh = ver[edge[i].v].h;
-
-                // updating height of u
-                ver[u].h = mh + 1;
-            }
+            // updating height of u
+            ver[u].h = mh + 1;
         }
     }
 
@@ -240,9 +273,9 @@ void Graph::relabel(int u)
 // main function for printing maximum flow of graph
 int Graph::getMaxFlow(int s, int t)
 {
-    preflow(s);
+    preprocess(s);
 
-    // loop untill none of the Vertex is active
+    // loop until none of the Vertex is active
     while (!active.empty())
     {
         int u = active.front()->name;
@@ -260,10 +293,11 @@ void Graph::PrintCondition()
 {
     for (int i = 0; i<ver.size(); ++i)
         cout << "Node " << ver[i].name << " with excess " << ver[i].e_flow << " and distance " << ver[i].h << endl;
-    for (int i=0; i<edge.size(); ++i)
+    for (int i=0; i<adj.size(); ++i)
     {
-        cout << "Edge " << edge[i].u << "-->" << edge[i].v << ", " << edge[i].flow << "/"
-             << edge[i].capacity << "\n";
+        for (int j=0; j<adj[i].size(); ++j)
+            cout << "Edge " << adj[i][j].u << "-->" << adj[i][j].v << ", " << adj[i][j].flow << "/"
+                 << adj[i][j].capacity << "\n";
     }
     cout << "\n\n";
 }
