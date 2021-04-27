@@ -10,7 +10,6 @@ struct Edge
 {
     // To store current flow and capacity of edge
     int flow, capacity;
-//    int flowResidual,
 
     // An edge u--->v has start vertex as u and end
     // vertex as v.
@@ -43,7 +42,6 @@ class Graph
 {
     int V; // No. of vertices
     vector<Vertex> ver;
-    vector<Edge> edge;
     // adjacency list of residual graph
     vector< vector<Edge> > adj;
 
@@ -70,8 +68,10 @@ public:
     // Return number in adj[u] for edge u->v
     int findEdge(int u, int v);
 
+    void globalRelabeling();
+
     // returns maximum flow from s to t
-    int getMaxFlow(int s, int t);
+    int getMaxFlow(int s);
 
     void PrintCondition();
 };
@@ -103,7 +103,6 @@ int Graph::findEdge(int u, int v)
 void Graph::addEdge(int u, int v, int capacity)
 {
     // flow is initialized with 0 for all edge
-//    edge.push_back(Edge(0, capacity, u, v));
 
     int index = findEdge(u, v);
     if (! (index==-1))
@@ -138,7 +137,7 @@ void Graph::preprocess(int s)
         flow = adj[s][i].capacity;
         // Residual capacity is 0
         adj[s][i].flow = 0;
-        adj[s][i].capacity = 0; // equal to not having this edge in residual
+        adj[s][i].capacity = 0; // means not having this edge in residual
 
         // Initialize excess flow for adjacent v
         ver[endV.name].e_flow += flow;
@@ -146,7 +145,6 @@ void Graph::preprocess(int s)
         cout << "Push in \"active\" node " << ver[endV.name].name << " with excess " << active.back()->e_flow << endl;
 
         addEdge(endV.name, s, flow);
-//        edge.push_back(Edge(0, adj[s][i].flow, edge[i].v, s));
     }
     PrintCondition();
 }
@@ -168,8 +166,6 @@ void Graph::updateReverseEdgeFlow(int uAdj, int i, int flow)
 
     // adding reverse Edge in residual graph
     addEdge(u, v, flow);
-//    Edge e = Edge(0, flow, u, v);
-//    edge.push_back(e);
 }
 
 // To push flow from overflowing vertex u
@@ -193,7 +189,6 @@ bool Graph::push(int u)
             // residual capacity of edge and excess flow.
             int flow = min(adj[u][i].capacity,
                            ver[u].e_flow);
-//            cout << "flow " << flow << endl;
 
 
             // Reduce excess flow for overflowing vertex
@@ -202,7 +197,6 @@ bool Graph::push(int u)
             // Increase excess flow for adjacent
             ver[adj[u][i].v].e_flow += flow;
 
-//            cout << "push from " << u << "-->" << adj[i][i].v << endl;
 
             // If v!= source and !=sink
             if (adj[u][i].v && adj[u][i].v!=ver.back().name)
@@ -270,17 +264,72 @@ void Graph::relabel(int u)
     PrintCondition();
 }
 
-// main function for printing maximum flow of graph
-int Graph::getMaxFlow(int s, int t)
+void Graph::globalRelabeling()
 {
-    preprocess(s);
+    int terminal = ver[ver.size()-1].name;
+//    int terminal = 1;
+    cout << "terminal " << terminal << endl;
+    vector <bool> visited(V, 0);
+    vector <int> distance(V, 0);
 
+    queue <int> q;
+    q.push(terminal);
+    visited[terminal] = true;
+    distance[terminal] = 0;
+
+    while (!q.empty())
+    {
+        int u = q.front();
+        q.pop();
+        cout << "from " << u << ": ";
+
+        for (int i=0; i<adj[u].size(); ++i)
+        {
+            // If the edge presents in residual graph
+            if (adj[u][i].capacity != 0 && visited[adj[u][i].v]==false)
+            {
+                distance[adj[u][i].v] = distance[u] + 1;
+                q.push(adj[u][i].v);
+                visited[adj[u][i].v] = true;
+                cout << " " << adj[u][i].v << "-h" << distance[adj[u][i].v] << " ";
+            }
+        }
+        cout << endl;
+    }
+
+    // Do not change height for sink and source
+    for (int i=1; i<ver.size()-1; ++i)
+    {
+        ver[i].h = distance[i];
+        cout << "distance["<< i << "]=" << distance[i] << "\n";
+    }
+    cout << endl;
+}
+
+// main function for printing maximum flow of graph
+int Graph::getMaxFlow(int s)
+{
+    int countGB = 0;
+    preprocess(s);
     // loop until none of the Vertex is active
     while (!active.empty())
     {
         int u = active.front()->name;
         if (!push(u))
-            relabel(u);
+        {
+            if (countGB%(3*V) || countGB==0)
+            {
+                cout << "No gb\n";
+                relabel(u);
+                countGB += 1;
+            }
+            else
+            {
+                cout << "else Gb=" << countGB << endl;
+                globalRelabeling();
+                countGB += 1;
+            }
+        }
     }
 
     // ver.back() returns last Vertex, whose
@@ -337,10 +386,10 @@ int main()
 //    g.addEdge(2, 3, 5);
 //    g.addEdge(1, 2, 5);
 
-    // Initialize source and sink
-    int s = 0, t = 5;
+    // Initialize source
+    int s = 0;
 
 // << "Maximum flow is "
-    cout << g.getMaxFlow(s, t);
+    cout << g.getMaxFlow(s);
     return 0;
 }
