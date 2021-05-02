@@ -70,7 +70,8 @@ public:
     // Return number in adj[u] for edge u->v
     int findEdge(int u, int v);
 
-    bool globalRelabeling();
+    void globalRelabeling();
+    void bfs(int u, int v);
 
     // returns maximum flow from s to t
     int getMaxFlow(int s);
@@ -137,7 +138,6 @@ void Graph::preprocess(int s)
         endV = ver[adj[s][i].v];
 
         flow = adj[s][i].capacity;
-        // Residual capacity is 0
         adj[s][i].flow = 0;
         adj[s][i].capacity = 0; // means not having this edge in residual
 
@@ -266,93 +266,61 @@ void Graph::relabel(int u)
 //    PrintCondition();
 }
 
-bool Graph::globalRelabeling()
+// return the distance from u to v for u (u--->v will be height for u)
+void Graph::bfs(int start, int end)
 {
-    int terminal = ver.size()-1;
-    int source = 0;
-//    cout << "terminal " << terminal << endl;
     vector <bool> visited(V, 0);
-    vector <int> distanceFromSink(V, 0);
-    vector <int> distanceFromSource(V, 0);
+    vector <int> distance(V, 0);
 
     queue <int> q;
-    q.push(terminal);
-    visited[terminal] = true;
-    distanceFromSink[terminal] = 0;
+    q.push(start);
+    visited[start] = true;
+    // source is 0 vertex
+    distance[start] = end==0 ? ver[0].h : 0;
 
-    // First BFS - from sink
     while (!q.empty())
     {
         int u = q.front();
         q.pop();
-        cout << "from " << u << ": ";
+//        cout << "from " << u << ": ";
 
         for (int i=0; i<adj[u].size(); ++i)
         {
             // If the edge presents in residual graph
             if (adj[u][i].capacity != 0 && visited[adj[u][i].v]==false)
             {
-                distanceFromSink[adj[u][i].v] = distanceFromSink[u] + 1;
+                distance[adj[u][i].v] = distance[u] + 1;
                 q.push(adj[u][i].v);
                 visited[adj[u][i].v] = true;
-                cout << " " << adj[u][i].v << "-h" << distanceFromSink[adj[u][i].v] << " ";
+                if (adj[u][i].v == end) break;
+//                cout << " " << adj[u][i].v << "-h" << distance[adj[u][i].v] << " ";
             }
         }
         cout << endl;
     }
 
-    for (int i=1; i<V; ++i)
-        visited[i] = false;
+//    cout << "height for u=" << start << " is " << distance[end] << endl;
+    ver[start].h = distance[end];
+}
 
-    q.push(source);
-    visited[source] = true;
-    distanceFromSource[source] = 0;
+void Graph::globalRelabeling()
+{
+/*
+    Запускаем бфс от каждой вершины сети, находим расстояние для неё до стока по остаточным ребрам, меняем высоту.
+    Если же добраться до стока невозможно, то находим расстояние от истока до вершины и заменяем высоту на него.
+ */
 
-//     Second BFS - from source
-    while (!q.empty())
+    int terminal = ver.size()-1;
+    int source = 0;
+
+
+    for (int i=1; i<V-1; ++i)
     {
-        int u = q.front();
-        q.pop();
-        cout << "from " << u << ": ";
-
-        for (int i=0; i<adj[u].size(); ++i)
-        {
-            // If the edge presents in residual graph
-            if (adj[u][i].capacity != 0 && visited[adj[u][i].v]==false)
-            {
-                distanceFromSource[adj[u][i].v] = distanceFromSource[u] + 1;
-                q.push(adj[u][i].v);
-                visited[adj[u][i].v] = true;
-                cout << " " << adj[u][i].v << "-h" << distanceFromSource[adj[u][i].v] << " ";
-            }
-        }
-        cout << endl;
+        bfs(i, terminal);
+        if (! ver[i].h) bfs(i, source);
+//        cout << endl;
     }
 
-    int flagSink = true;
-    int flagSource = true;
-
-    // Do not change height for sink and source
-    // Change height to distance only if d>=height
-    for (int i=1; i<ver.size()-1; ++i)
-    {
-        if (distanceFromSink[i] < ver[i].h) flagSink = false;
-        if (distanceFromSource[i] < ver[i].h) flagSource = false;
-    }
-
-    // If all distances (from sink or from source) > heights, then change with max
-    if (flagSink || flagSource)
-    {
-        for (int i=1; i<ver.size()-1; ++i)
-        {
-            ver[i].h = distanceFromSink[i] >= distanceFromSource[i] ? distanceFromSink[i] : distanceFromSource[i];
-            cout << "distanceFromSink["<< i << "]=" << distanceFromSink[i] << ", distanceFromSource["<< i << "]=" << distanceFromSource[i] << "\n";
-        }
-        cout << endl;
-        return true;
-    }
-    else
-        return false;
 }
 
 // main function for printing maximum flow of graph
@@ -366,17 +334,15 @@ int Graph::getMaxFlow(int s)
         int u = active.front()->name;
         if (!push(u))
         {
-            if (countGB%V || countGB==0) //countGB%(3*V)
+            if (countGB%V) //countGB%(3*V)
             {
-                cout << "No gb\n";
                 relabel(u);
                 countGB += 1;
             }
             else
             {
-                cout << "else Gb=" << countGB << endl;
-                if (!globalRelabeling());
-                relabel(u);
+//                cout << "else Gb=" << countGB << endl;
+                globalRelabeling();
                 countGB += 1;
             }
         }
@@ -405,9 +371,19 @@ void Graph::PrintCondition()
 // Driver program to test above functions
 int main()
 {
-    int V = 6;
+    int n, m, a, b, c;
+    cin >> n >> m;
+    Graph g(n);
+
+    for (int i=0; i<m; ++i)
+    {
+        cin >> a >> b >> c;
+//        cout << a << "->" << b << " = " << c << endl;
+        g.addEdge(a, b, c);
+    }
+//    int V = 6;
 //    int V = 4;
-    Graph g(V);
+//    Graph g(V);
 
 
 //    g.addEdge(0, 1, 10000);
@@ -417,16 +393,16 @@ int main()
 //    g.addEdge(1, 3, 10000);
 
 //    // Creating above shown flow network
-    g.addEdge(0, 1, 16);
-    g.addEdge(0, 2, 13);
-    g.addEdge(1, 2, 10);
-    g.addEdge(2, 1, 4);
-    g.addEdge(1, 3, 12);
-    g.addEdge(2, 4, 14);
-    g.addEdge(3, 2, 9);
-    g.addEdge(3, 5, 20);
-    g.addEdge(4, 3, 7);
-    g.addEdge(4, 5, 4);
+//    g.addEdge(0, 1, 16);
+//    g.addEdge(0, 2, 13);
+//    g.addEdge(1, 2, 10);
+//    g.addEdge(2, 1, 4);
+//    g.addEdge(1, 3, 12);
+//    g.addEdge(2, 4, 14);
+//    g.addEdge(3, 2, 9);
+//    g.addEdge(3, 5, 20);
+//    g.addEdge(4, 3, 7);
+//    g.addEdge(4, 5, 4);
 
 
 //    g.addEdge(0, 1, 2);
