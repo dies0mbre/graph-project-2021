@@ -5,6 +5,8 @@
 #include <iostream>
 #include <queue>
 #include <chrono>
+#include <fstream>
+
 using namespace std;
 using namespace std::chrono;
 
@@ -143,8 +145,14 @@ void Graph::preprocess(int s)
 
         // Initialize excess flow for adjacent v
         ver[endV.name].e_flow += flow;
-        active.push(&ver[endV.name]);
-//        cout << "Push in \"active\" node " << ver[endV.name].name << " with excess " << active.back()->e_flow << endl;
+        if (ver[endV.name].name != ver.size()-1) // сток не считается активной
+        {
+            active.push(&ver[endV.name]);
+//            cout << "Push in \"active\" node " << ver[endV.name].name << " with excess " << active.back()->e_flow << endl;
+        }
+//        for (int j=0; j<active.size(); ++j)
+//            cout << j << " ";
+//        cout << endl;
 
         addEdge(endV.name, s, flow);
     }
@@ -206,8 +214,11 @@ bool Graph::push(int u)
                 // and if excess in v was 0, then add in active
                 if (!ver[adj[u][i].v].e_flow-flow)
                 {
-                    active.push(&ver[adj[u][i].v]);
-//                    cout << "Push in \"active\" node " << adj[u][i].v << " with excess " << active.back()->e_flow << endl;
+                    if (ver[adj[u][i].v].name != ver.size()-1) // сток не считается активной вершиной
+                    {
+                        active.push(&ver[adj[u][i].v]);
+//                        cout << "Push in \"active\" node " << adj[u][i].v << " with excess " << active.back()->e_flow << endl;
+                    }
                 }
             }
 
@@ -219,11 +230,11 @@ bool Graph::push(int u)
 //            cout << "PUSH " << u <<"-->" << adj[u][i].v << ": " << flow << endl;
 
             updateReverseEdgeFlow(u, i, flow);
-            PrintCondition();
+//            PrintCondition();
             return true;
         }
     }
-    PrintCondition();
+//    PrintCondition();
     return false;
 }
 
@@ -260,9 +271,11 @@ void Graph::relabel(int u)
     // If excess if equal to 0, then no pushing in active
     if (! ver[u].e_flow) return;
 
-    active.push(&ver[u]);
-
-//    cout << "Push in \"active\" node " << ver[u].name << " with excess " << active.back()->e_flow << endl;
+    if (ver[u].name != ver.size()-1) // сток не считается активной вершиной
+    {
+        active.push(&ver[u]);
+//        cout << "Push in \"active\" node " << ver[u].name << " with excess " << active.back()->e_flow << endl;
+    }
 //    PrintCondition();
 }
 
@@ -296,7 +309,7 @@ void Graph::bfs(int start, int end)
 //                cout << " " << adj[u][i].v << "-h" << distance[adj[u][i].v] << " ";
             }
         }
-        cout << endl;
+//        cout << endl;
     }
 
 //    cout << "height for u=" << start << " is " << distance[end] << endl;
@@ -314,8 +327,9 @@ void Graph::globalRelabeling()
     int source = 0;
 
 
-    for (int i=1; i<V-1; ++i)
+    for (int i=1; i<terminal-1; ++i)
     {
+//        cout << "Global RELABELING" << endl;
         bfs(i, terminal);
         if (! ver[i].h) bfs(i, source);
 //        cout << endl;
@@ -372,18 +386,33 @@ void Graph::PrintCondition()
 int main()
 {
     int n, m, a, b, c;
-    cin >> n >> m;
+    ifstream infile("C:\\Users\\Asus\\CLionProjects\\study\\graphProject\\MaxFlow-tests\\test_rl3.txt");
+    infile >> n >> m;
+    cout << n << " " << m << endl;
+
     Graph g(n);
 
-    for (int i=0; i<m; ++i)
+    while (infile >> a >> b >> c)
     {
-        cin >> a >> b >> c;
-//        cout << a << "->" << b << " = " << c << endl;
-        g.addEdge(a, b, c);
+//        cout << a-1 << "->" << b-1 << " = " << c << endl;
+        g.addEdge(a-1, b-1, c);
     }
+
+//    cin >> n >> m;
+//    Graph g(n);
+
+//    for (int i=0; i<m; ++i)
+//    {
+//        cin >> a >> b >> c;
+//        cout << a << "->" << b << " = " << c << endl;
+//        g.addEdge(a, b, c);
+//    }
 //    int V = 6;
 //    int V = 4;
 //    Graph g(V);
+//
+//    g.addEdge(0, 1, 16);
+//    g.addEdge(0, 1, 2);
 
 
 //    g.addEdge(0, 1, 10000);
