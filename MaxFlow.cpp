@@ -386,7 +386,7 @@ void Graph::PrintCondition()
 int main()
 {
     int n, m, a, b, c;
-    ifstream infile("C:\\Users\\Asus\\CLionProjects\\study\\graphProject\\MaxFlow-tests\\test_rl3.txt");
+    ifstream infile("C:\\Users\\Asus\\CLionProjects\\study\\graphProject\\MaxFlow-tests\\test_rl01.txt");
     infile >> n >> m;
     cout << n << " " << m << endl;
 
