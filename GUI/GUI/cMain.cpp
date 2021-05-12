@@ -14,6 +14,9 @@
 
 // For compilers that support precompilation, includes "wx/wx.h".
 #include "wx/wxprec.h"
+#include <wx/arrimpl.cpp>
+
+#include <iostream>
 
 #ifdef __BORLANDC__
 #pragma hdrstop
@@ -28,6 +31,10 @@
 #include <wx/bitmap.h>
 
 #define APP_NAME "Image Segmentation"
+
+WX_DECLARE_OBJARRAY(wxPoint, PointArray);
+
+
 
 enum
 {
@@ -52,11 +59,21 @@ class MyCanvas : public wxPanel
 public:
 	MyCanvas(wxWindow* parent, wxWindowID, const wxPoint& pos, const wxSize& size);
 	~MyCanvas();
+
 	void LoadImage(wxString fileName);
 	void SaveImage(wxString fileName);
 	void ProcessImage();
-	void BestSize();
+	void BestSize();	
 
+	wxStaticText* st1;
+	wxStaticText* st2;
+	wxPoint penPos;
+	PointArray bkgDots;
+	PointArray objDots;
+
+protected:
+	void OnLeftDown(wxMouseEvent& event); // mouse event handler
+	void OnRightDown(wxMouseEvent& event);
 private:
 	int m_imageWidth;
 	int m_imageHeight;
@@ -65,13 +82,19 @@ private:
 	unsigned char* m_myImage;	// used to process the image
 
 	void OnPaint(wxPaintEvent& event);
+	// void OnLeftMouceClicked(wxMouseEvent& event);
 
 	DECLARE_EVENT_TABLE()
 };
 
 BEGIN_EVENT_TABLE(MyCanvas, wxPanel)
 EVT_PAINT(MyCanvas::OnPaint)
+EVT_LEFT_DOWN(MyCanvas::OnLeftDown)
+EVT_RIGHT_DOWN(MyCanvas::OnRightDown)
 END_EVENT_TABLE()
+
+
+WX_DEFINE_OBJARRAY(PointArray);
 
 //------------------------------------------------------------------------
 MyCanvas::MyCanvas(wxWindow* parent, wxWindowID id,
@@ -79,6 +102,8 @@ MyCanvas::MyCanvas(wxWindow* parent, wxWindowID id,
 	: wxPanel(parent, id, pos, size, wxSUNKEN_BORDER)
 	//------------------------------------------------------------------------
 {
+	st1 = new wxStaticText(this, -1, wxT("X"), wxPoint(10, 10));
+	st2 = new wxStaticText(this, -1, wxT("Y"), wxPoint(10, 30));
 	m_myImage = NULL;
 	m_imageRGB = NULL;
 }
@@ -143,6 +168,13 @@ void MyCanvas::ProcessImage()
 {
 	long int i = m_imageWidth * m_imageHeight * 3;
 
+	// initial colors for a pixel under mouce clicked object
+	st1->SetLabel(wxString::Format(wxT("0 item: (%d, %d) then place is %d and color is %d %d %d"), objDots.Item(0).x,
+		objDots.Item(0).y, objDots.Item(0).y * m_imageWidth + objDots.Item(0).x,
+		m_myImage[3 * (objDots.Item(0).y * m_imageWidth + objDots.Item(0).x)],
+		m_myImage[3 * (objDots.Item(0).y * m_imageWidth + objDots.Item(0).x) + 1],
+		m_myImage[3 * (objDots.Item(0).y * m_imageWidth + objDots.Item(0).x) + 2]));
+
 	// m_myImage is a monodimentional vector of pixels (RGBRGB...)
 	while (i--)
 		m_myImage[i] = 255 - m_myImage[i];
@@ -176,6 +208,36 @@ void MyCanvas::OnPaint(wxPaintEvent& WXUNUSED(event))
 	}
 }
 
+// for objects used white dots
+void MyCanvas::OnLeftDown(wxMouseEvent& event)
+{
+	if (event.LeftDown()) {
+		penPos = event.GetPosition();
+		wxClientDC dc(this);
+		dc.SetPen(*wxWHITE_PEN);
+		dc.DrawPoint(penPos);
+		dc.SetPen(wxNullPen);
+		st1->SetLabel(wxString::Format(wxT("x: %d"), penPos.x));
+		st2->SetLabel(wxString::Format(wxT("y: %d"), penPos.y));
+		objDots.Add(penPos);
+	}
+}
+
+// for background used black dots
+void MyCanvas::OnRightDown(wxMouseEvent& event)
+{
+	if (event.RightDown()) {
+		penPos = event.GetPosition();
+		wxClientDC dc(this);
+		dc.SetPen(*wxBLACK_PEN);
+		dc.DrawPoint(penPos);
+		dc.SetPen(wxNullPen);
+		st1->SetLabel(wxString::Format(wxT("x: %d"), penPos.x));
+		st2->SetLabel(wxString::Format(wxT("y: %d"), penPos.y));
+		bkgDots.Add(penPos);
+	}
+}
+
 //************************************************************************
 //************************************************************************
 // Frame class (the main window)
@@ -187,7 +249,7 @@ class MyFrame : public wxFrame
 	//------------------------------------------------------------------------
 {
 public:
-	MyFrame(const wxString& title, const wxPoint& pos, const wxSize& size);
+	MyFrame(const wxString& title, const wxPoint& pos, const wxSize& size); 
 
 	// Event handlers
 protected:
@@ -234,6 +296,7 @@ MyFrame::MyFrame(const wxString& title, const wxPoint& pos, const wxSize& size)
 	wxMenuBar* menuBar = new wxMenuBar();
 	menuBar->Append(file_menu, _T("&File"));
 	SetMenuBar(menuBar);
+
 
 	// create the canvas that will manage the image
 	m_canvas = new MyCanvas(this, -1, wxDefaultPosition, wxDefaultSize);
@@ -308,6 +371,7 @@ void MyFrame::OnBestSize(wxCommandEvent& WXUNUSED(event))
 	m_canvas->BestSize();
 }
 
+
 //************************************************************************
 //************************************************************************
 // Application class
@@ -321,6 +385,7 @@ class MyApp : public wxApp
 	virtual bool OnInit();
 };
 
+DECLARE_APP(MyApp)
 IMPLEMENT_APP(MyApp) // macro that contains the main() function
 
 
