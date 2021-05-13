@@ -10,6 +10,7 @@
 using namespace std;
 using namespace std::chrono;
 
+
 struct Edge
 {
     // To store current flow and capacity of edge
@@ -81,6 +82,7 @@ public:
     void PrintCondition();
 };
 
+
 Graph::Graph(int V)
 {
     this->V = V;
@@ -95,7 +97,7 @@ Graph::Graph(int V)
 
 int Graph::findEdge(int u, int v)
 {
-    for (int i=0; i<adj[u].size(); ++i)
+    for (unsigned int i=0; i<adj[u].size(); ++i)
     {
         if (adj[u][i].v == v)
         {
@@ -135,7 +137,7 @@ void Graph::preprocess(int s)
     Vertex endV(0,0,0);
 
     //
-    for (int i = 0; i < adj[s].size(); i++)
+    for (unsigned int i = 0; i < adj[s].size(); i++)
     {
         endV = ver[adj[s][i].v];
 
@@ -165,7 +167,7 @@ void Graph::updateReverseEdgeFlow(int uAdj, int i, int flow)
 //    cout << "Update reverse for " << uAdj << "-->" << adj[uAdj][i].v << "with flow " << flow << endl;
     int u = adj[uAdj][i].v, v = uAdj;
 
-    for (int j = 0; j < adj[u].size(); j++)
+    for (unsigned int j = 0; j < adj[u].size(); j++)
     {
         if (adj[u][j].v == v)
         {
@@ -184,7 +186,7 @@ bool Graph::push(int u)
 //    cout << "push for << " << u << endl;
     // Traverse through all edges to find an adjacent (of u)
     // to which flow can be pushed
-    for (int i = 0; i < adj[u].size(); i++)
+    for (unsigned int i = 0; i < adj[u].size(); i++)
     {
         // if capacity==0 then no flow can be pushed
         if (adj[u][i].capacity == 0)
@@ -251,7 +253,7 @@ void Graph::relabel(int u)
     active.pop();
 
     // Find the adjacent with minimum height
-    for (int i = 0; i < adj[u].size(); i++)
+    for (unsigned int i = 0; i < adj[u].size(); i++)
     {
         // if flow is equal to capacity then no
         // relabeling
@@ -297,7 +299,7 @@ void Graph::bfs(int start, int end)
         q.pop();
 //        cout << "from " << u << ": ";
 
-        for (int i=0; i<adj[u].size(); ++i)
+        for (unsigned int i=0; i<adj[u].size(); ++i)
         {
             // If the edge presents in residual graph
             if (adj[u][i].capacity != 0 && visited[adj[u][i].v]==false)
@@ -370,11 +372,11 @@ int Graph::getMaxFlow(int s)
 
 void Graph::PrintCondition()
 {
-    for (int i = 0; i<ver.size(); ++i)
+    for (unsigned int i = 0; i<ver.size(); ++i)
         cout << "Node " << ver[i].name << " with excess " << ver[i].e_flow << " and distance " << ver[i].h << endl;
-    for (int i=0; i<adj.size(); ++i)
+    for (unsigned int i=0; i<adj.size(); ++i)
     {
-        for (int j=0; j<adj[i].size(); ++j)
+        for (unsigned int j=0; j<adj[i].size(); ++j)
             cout << "Edge " << adj[i][j].u << "-->" << adj[i][j].v << ", " << adj[i][j].flow << "/"
                  << adj[i][j].capacity << "\n";
     }
@@ -385,18 +387,18 @@ void Graph::PrintCondition()
 // Driver program to test above functions
 int main()
 {
-    int n, m, a, b, c;
-    ifstream infile("C:\\Users\\Asus\\CLionProjects\\study\\graphProject\\MaxFlow-tests\\test_rl01.txt");
-    infile >> n >> m;
-    cout << n << " " << m << endl;
+    //int n, m, a, b, c;
+    ////ifstream infile("C:\\Users\\Asus\\CLionProjects\\study\\graphProject\\MaxFlow-tests\\test_rl01.txt");
+    //infile >> n >> m;
+    //cout << n << " " << m << endl;
 
-    Graph g(n);
+    //Graph g(n);
 
-    while (infile >> a >> b >> c)
-    {
+    //while (infile >> a >> b >> c)
+    //{
 //        cout << a-1 << "->" << b-1 << " = " << c << endl;
-        g.addEdge(a-1, b-1, c);
-    }
+        //g.add/*Edge(a-1, b-1, c);
+    //}
 
 //    cin >> n >> m;
 //    Graph g(n);
@@ -408,8 +410,8 @@ int main()
 //        g.addEdge(a, b, c);
 //    }
 //    int V = 6;
-//    int V = 4;
-//    Graph g(V);
+    int V = 4;
+    Graph g(V);
 //
 //    g.addEdge(0, 1, 16);
 //    g.addEdge(0, 1, 2);
@@ -434,11 +436,11 @@ int main()
 //    g.addEdge(4, 5, 4);
 
 
-//    g.addEdge(0, 1, 2);
-//    g.addEdge(0, 2, 4);
-//    g.addEdge(1, 3, 1);
-//    g.addEdge(2, 3, 5);
-//    g.addEdge(1, 2, 3);
+    g.addEdge(0, 1, 2);
+    g.addEdge(0, 2, 4);
+    g.addEdge(1, 3, 1);
+    g.addEdge(2, 3, 5);
+    g.addEdge(1, 2, 3);
 
     // Initialize source
     int s = 0;
