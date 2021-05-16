@@ -31,14 +31,12 @@ using std::queue;
 using std::min;
 #define APP_NAME "Image Segmentation"
 
-auto objHist = make_histogram(axis::regular<>(15, 0, 255, "x"));
-auto bkgHist = make_histogram(axis::regular<>(15, 0, 255, "x"));
+auto objHist = make_histogram(axis::regular<>(8, 0, 255, "x"));
+auto bkgHist = make_histogram(axis::regular<>(8, 0, 255, "x"));
 
-
-WX_DECLARE_OBJARRAY(wxPoint, PointArray);
-PointArray bkgDots;
-PointArray objDots;
-WX_DEFINE_OBJARRAY(PointArray);
+// std::pair <wxPoint, 
+vector <int> bkgDots;
+vector <int> objDots;
 
 
 struct Edge
@@ -62,10 +60,11 @@ struct Edge
 // Represent a Vertex
 struct Vertex
 {
-    int name, h, depth, pixelX, pixelY;
+    int name, h, depth, pixelX, pixelY, label;
+    // label = 0-object, 1-bkg, 2-unknown
     double maxB, e_flow;
 
-    Vertex(int name, int h, double e_flow, int x, int y, int depth=-1)
+    Vertex(int name, int h, double e_flow, int x, int y, int label = 2, int depth=-1)
     {
         this->name = name;
         this->h = h;
@@ -78,27 +77,45 @@ struct Vertex
 };
 
 
-void histogram(PointArray* obj, PointArray* bkg)
+void computeHistogram()
 {
+    objHist.fill(objDots);
+    bkgHist.fill(bkgDots);
 
+    /* access to the number of values in the bin    
+    std::cout << int(objHist.at(objHist.axis(0).index(90))) << std::endl;
+    std::cout << objHist.at(bkgHist.axis(0).index(120)) << std::endl;*/
 }
+
+
+double probabilityValue(int depth, int area, int lambda = 50) // area: 0 - obj, bkg - 1
+{
+    double probObj = double(objHist.at(objHist.axis(0).index(depth))) / objDots.size();
+    double probBkg = double(bkgHist.at(bkgHist.axis(0).index(depth))) / bkgDots.size();
+    double sumProb = probObj + probBkg;
+
+    if (sumProb < 1.0e-10 || probObj < 1.0e-10 || probBkg < 1.0e-10) //==0
+    {
+        return 150.0; // as double max
+    }
+
+    // with normalization
+    if (area) // bkg
+    {
+        return -lambda * log(probBkg / sumProb);
+    }
+    else // obj
+    {
+        return -lambda * log(probObj / sumProb);
+    }
+}
+
 
 double bValue(Vertex* p, Vertex* q, int sigma = 50, int dist = 1)
 {
     return exp(-pow(p->depth - q->depth, 2) / (2 * pow(sigma, 2))) / dist;
 }
 
-double probabilityValue(Vertex* p, int area) // area: 0 - bkg, obj - 1
-{
-    if (area) // for object
-    {
-        return -log(1);
-    }
-    else // for background
-    {
-        return -log(1);
-    }
-}
 
 // To represent a flow network
 class Graph
@@ -135,32 +152,24 @@ public:
         }
     }
 
+    void setLabelVertex(int positionInVer, int label)
+    {
+        ver[positionInVer].label = label;
+    }
+
     double getSmth()
     {
         return ver[0].depth;
     }
+    
     // function to add an edge to graph
     void addEdge(int u, int v, double capacity)
     {
         // flow is initialized with 0 for all edge
 
         int index = findEdge(u, v);
-        if (!(index == -1))
+        if (index == -1) // there is no u<->v in adj list 
         {
-            // means u->v in adj list for u
-
-            //adj[u][index].capacity += capacity;
-            //index = findEdge(v, u);
-            //adj[v][index].capacity += 0;
-
-            // u->v and v->u both
-            adj[u][index].capacity = capacity;
-            index = findEdge(v, u);
-            adj[v][index].capacity = capacity;
-        }
-        else
-        {
-            //        cout << "Index==-1 there is no "<< u << "->" <<v<< " in adj list for "<< u << endl;
             adj[u].push_back(Edge(0, capacity, u, v));
             adj[v].push_back(Edge(0, capacity, v, u));
         }
@@ -186,6 +195,7 @@ public:
     int getMaxFlow(int s);
 
     void Init(int numColumn, int numRow, unsigned char* imageArray);
+    void contactWithTerminals();
 
     void PrintCondition()
     {
@@ -357,6 +367,32 @@ void Graph::Init(int numColumn, int numRow, unsigned char* imageArray)
     // source and sink has no edges with image's graph for now
 }
 
+void Graph::contactWithTerminals()
+{
+    // arcs beetwen pixel-vertex and source/sink
+    int source = 0;
+    int sink = V - 1;
+
+    for (int i = 1; i < V - 1; ++i)
+    {
+        if (ver[i].label == 0) // obj dot
+        {
+            addEdge(i, source, 1 + ver[i].maxB);
+            addEdge(i, sink, 0);
+        }
+        else if (ver[i].label == 1) // bkg dot
+        {
+            addEdge(i, source, 0);
+            addEdge(i, sink, 1 + ver[i].maxB);
+        }
+        else // unknown dot
+        {
+            addEdge(i, source, probabilityValue(ver[i].depth, 1)); // bkg
+            addEdge(i, sink, probabilityValue(ver[i].depth, 0));   // obj
+        }
+    }
+}
+
 void Graph::preprocess(int s)
 {
     // Making h of source Vertex equal to no. of vertices
@@ -376,18 +412,14 @@ void Graph::preprocess(int s)
 
         // Initialize excess flow for adjacent v
         ver[endV.name].e_flow += flow;
-        if (ver[endV.name].name != ver.size() - 1) // СЃС‚РѕРє РЅРµ СЃС‡РёС‚Р°РµС‚СЃСЏ Р°РєС‚РёРІРЅРѕР№
+        if (ver[endV.name].name != ver.size() - 1)
         {
             active.push(&ver[endV.name]);
-            //            cout << "Push in \"active\" node " << ver[endV.name].name << " with excess " << active.back()->e_flow << endl;
         }
-        //        for (int j=0; j<active.size(); ++j)
-        //            cout << j << " ";
-        //        cout << endl;
 
-        addEdge(endV.name, s, flow);
+        // update for s<-v (+flow to capacity)
+        updateReverseEdgeFlow(s, i, flow);
     }
-    //    PrintCondition();
 }
 
 // Update reverse flow for flow added on ith Edge for u
@@ -404,15 +436,11 @@ void Graph::updateReverseEdgeFlow(int uAdj, int i, double flow)
             return;
         }
     }
-
-    // adding reverse Edge in residual graph
-    addEdge(u, v, flow);
 }
 
 // To push flow from overflowing vertex u
 bool Graph::push(int u)
 {
-    //    cout << "push for << " << u << endl;
         // Traverse through all edges to find an adjacent (of u)
         // to which flow can be pushed
     for (unsigned int i = 0; i < adj[u].size(); i++)
@@ -445,27 +473,18 @@ bool Graph::push(int u)
                 // and if excess in v was 0, then add in active
                 if (!ver[adj[u][i].v].e_flow - flow)
                 {
-                    if (ver[adj[u][i].v].name != ver.size() - 1) // СЃС‚РѕРє РЅРµ СЃС‡РёС‚Р°РµС‚СЃСЏ Р°РєС‚РёРІРЅРѕР№ РІРµСЂС€РёРЅРѕР№
-                    {
-                        active.push(&ver[adj[u][i].v]);
-                        //                        cout << "Push in \"active\" node " << adj[u][i].v << " with excess " << active.back()->e_flow << endl;
-                    }
+                   active.push(&ver[adj[u][i].v]);
                 }
             }
 
 
-            // Add residual flow (With capacity 0 and negative
-            // flow)
+            // Add residual flow (With capacity 0 and negative flow)
             adj[u][i].capacity -= flow;
 
-            //            cout << "PUSH " << u <<"-->" << adj[u][i].v << ": " << flow << endl;
-
             updateReverseEdgeFlow(u, i, flow);
-            //            PrintCondition();
             return true;
         }
     }
-    //    PrintCondition();
     return false;
 }
 
@@ -732,6 +751,9 @@ void MyCanvas::ProcessImage()
 {
 	long int i = m_imageWidth * m_imageHeight * 3;
 
+    computeHistogram();
+    p_V->contactWithTerminals();
+
 	//int V = 4;
 	//Graph g(V);
 
@@ -740,26 +762,16 @@ void MyCanvas::ProcessImage()
 	//int maxFlow = g.getMaxFlow(s);
 
 	// initial colors for a pixel under mouce clicked object
-	st1->SetLabel(wxString::Format(wxT("0 item: (%d, %d) then place is %d and color is %d %d %d"), objDots.Item(0).x,
-		objDots.Item(0).y, objDots.Item(0).y * m_imageWidth + objDots.Item(0).x,
-		m_myImage[3 * (objDots.Item(0).y * m_imageWidth + objDots.Item(0).x)],
-		m_myImage[3 * (objDots.Item(0).y * m_imageWidth + objDots.Item(0).x) + 1],
-		m_myImage[3 * (objDots.Item(0).y * m_imageWidth + objDots.Item(0).x) + 2]));
+	//st1->SetLabel(wxString::Format(wxT("0 item: (%d, %d) then place is %d and color is %d %d %d"), objDots[0].first.x,
+	//	objDots[0].first.y, objDots[0].first.y * m_imageWidth + objDots[0].first.x,
+	//	m_myImage[3 * (objDots[0].first.y * m_imageWidth + objDots[0].first.x)],
+	//	m_myImage[3 * (objDots[0].first.y * m_imageWidth + objDots[0].first.x) + 1],
+	//	m_myImage[3 * (objDots[0].first.y * m_imageWidth + objDots[0].first.x) + 2]));
 
 	//st2->SetLabel(wxString::Format(wxT("maxFlow = %d"), maxFlow));
 
-    auto h = make_histogram(
-        axis::regular<>(4, 0.0, 2.0, "x")
-    );
-
-    // push some values into the histogram
-    for (auto x : { 0.4, 1.1, 0.3, 1.7, 10. })
-        h(x);
-
-
-    st2->SetLabel(wxString::Format(wxT("h.at(0) = %d"), int(h.at(0))));
-
-    std::cout << std::flush;
+    p_V->getMaxFlow(0);
+    st2->SetLabel(wxString::Format(wxT("Oh")));
 
 	// m_myImage is a monodimentional vector of pixels (RGBRGB...)
 	while (i--)
@@ -805,7 +817,9 @@ void MyCanvas::OnLeftDown(wxMouseEvent& event)
 		dc.SetPen(wxNullPen);
 		st1->SetLabel(wxString::Format(wxT("x: %d"), penPos.x));
 		st2->SetLabel(wxString::Format(wxT("y: %d"), penPos.y));
-		objDots.Add(penPos);
+
+        p_V->setLabelVertex(penPos.y * m_imageWidth + penPos.x + 1, 0);
+        objDots.push_back(m_myImage[3 * (penPos.y * m_imageWidth + penPos.x)]);
 	}
 }
 
@@ -820,7 +834,9 @@ void MyCanvas::OnRightDown(wxMouseEvent& event)
 		dc.SetPen(wxNullPen);
 		st1->SetLabel(wxString::Format(wxT("x: %d"), penPos.x));
 		st2->SetLabel(wxString::Format(wxT("y: %d"), penPos.y));
-		bkgDots.Add(penPos);
+        // bkgDots.push_back(std::make_pair(penPos, m_myImage[3 * (penPos.y * m_imageWidth + penPos.x)]));
+        p_V->setLabelVertex(penPos.y * m_imageWidth + penPos.x + 1, 1);
+		bkgDots.push_back(m_myImage[3 * (penPos.y * m_imageWidth + penPos.x)]);
 	}
 }
 
