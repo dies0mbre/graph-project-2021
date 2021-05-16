@@ -44,13 +44,13 @@ WX_DEFINE_OBJARRAY(PointArray);
 struct Edge
 {
     // To store current flow and capacity of edge
-    int flow, capacity;
+    double flow, capacity;
 
     // An edge u--->v has start vertex as u and end
     // vertex as v.
     int u, v;
 
-    Edge(int flow, int capacity, int u, int v)
+    Edge(double flow, double capacity, int u, int v)
     {
         this->flow = flow;
         this->capacity = capacity;
@@ -62,16 +62,18 @@ struct Edge
 // Represent a Vertex
 struct Vertex
 {
-    int name, h, e_flow, depth;
-    double maxB;
+    int name, h, depth, pixelX, pixelY;
+    double maxB, e_flow;
 
-    Vertex(int name, int h, int e_flow, int depth=-1)
+    Vertex(int name, int h, double e_flow, int x, int y, int depth=-1)
     {
         this->name = name;
         this->h = h;
         this->e_flow = e_flow;
         this->depth = depth;
         this->maxB = -1;
+        this->pixelX = x;
+        this->pixelY = y;
     }
 };
 
@@ -83,7 +85,7 @@ void histogram(PointArray* obj, PointArray* bkg)
 
 double bValue(Vertex* p, Vertex* q, int sigma = 50, int dist = 1)
 {
-    return exp(-pow(p->depth - q->depth, 2) / (2 * sigma)) / dist;
+    return exp(-pow(p->depth - q->depth, 2) / (2 * pow(sigma, 2))) / dist;
 }
 
 double probabilityValue(Vertex* p, int area) // area: 0 - bkg, obj - 1
@@ -119,7 +121,7 @@ class Graph
     void preprocess(int s);
 
     // Function to reverse edge
-    void updateReverseEdgeFlow(int uAdj, int i, int flow);
+    void updateReverseEdgeFlow(int uAdj, int i, double flow);
 
 public:
     Graph(int V) {
@@ -128,13 +130,17 @@ public:
         // all vertices are initialized with 0 height
         // and 0 excess flow
         for (int i = 0; i < V; i++) {
-            ver.push_back(Vertex(i, 0, 0));
+            ver.push_back(Vertex(i, 0, 0, 0, 0));
             adj.push_back(vector<Edge>());
         }
     }
 
+    double getSmth()
+    {
+        return ver[0].depth;
+    }
     // function to add an edge to graph
-    void addEdge(int u, int v, int capacity)
+    void addEdge(int u, int v, double capacity)
     {
         // flow is initialized with 0 for all edge
 
@@ -142,16 +148,21 @@ public:
         if (!(index == -1))
         {
             // means u->v in adj list for u
-    //        cout << "Index!=-1 there is "<< u << "->" <<v<< " in adj list for "<< u << endl;
-            adj[u][index].capacity += capacity;
+
+            //adj[u][index].capacity += capacity;
+            //index = findEdge(v, u);
+            //adj[v][index].capacity += 0;
+
+            // u->v and v->u both
+            adj[u][index].capacity = capacity;
             index = findEdge(v, u);
-            adj[v][index].capacity += 0;
+            adj[v][index].capacity = capacity;
         }
         else
         {
             //        cout << "Index==-1 there is no "<< u << "->" <<v<< " in adj list for "<< u << endl;
             adj[u].push_back(Edge(0, capacity, u, v));
-            adj[v].push_back(Edge(0, 0, v, u));
+            adj[v].push_back(Edge(0, capacity, v, u));
         }
     }
 
@@ -217,6 +228,8 @@ void Graph::Init(int numColumn, int numRow, unsigned char* imageArray)
 
             depthPixel = imageArray[3 * currentPixelPosition];
             ver[verPosition].depth = depthPixel;
+            ver[verPosition].pixelX = i;
+            ver[verPosition].pixelY = j;
 
             if (i == 0)
             {
@@ -253,7 +266,7 @@ void Graph::Init(int numColumn, int numRow, unsigned char* imageArray)
                     ver[verPosition].maxB = *max_element(begin(bValues), end(bValues));
                     addEdge(verPosition, nA + 1, bValues[0]);
                     addEdge(verPosition, nD + 1, bValues[1]);
-                    addEdge(verPosition, nS + 1, bValues[1]);
+                    addEdge(verPosition, nS + 1, bValues[2]);
                     bValues.clear();
                     continue; }
             }
@@ -292,7 +305,7 @@ void Graph::Init(int numColumn, int numRow, unsigned char* imageArray)
                     ver[verPosition].maxB = *max_element(begin(bValues), end(bValues));
                     addEdge(verPosition, nA + 1, bValues[0]);
                     addEdge(verPosition, nD + 1, bValues[1]);
-                    addEdge(verPosition, nW + 1, bValues[1]);
+                    addEdge(verPosition, nW + 1, bValues[2]);
                     bValues.clear();
                     continue; }
             }
@@ -306,7 +319,7 @@ void Graph::Init(int numColumn, int numRow, unsigned char* imageArray)
                 ver[verPosition].maxB = *max_element(begin(bValues), end(bValues));
                 addEdge(verPosition, nS + 1, bValues[0]);
                 addEdge(verPosition, nD + 1, bValues[1]);
-                addEdge(verPosition, nW + 1, bValues[1]);
+                addEdge(verPosition, nW + 1, bValues[2]);
                 bValues.clear();
                 continue; } 
             else if (j == numColumn - 1) {                      // ˧ nW nA nS
@@ -319,7 +332,7 @@ void Graph::Init(int numColumn, int numRow, unsigned char* imageArray)
                 ver[verPosition].maxB = *max_element(begin(bValues), end(bValues));
                 addEdge(verPosition, nA + 1, bValues[0]);
                 addEdge(verPosition, nW + 1, bValues[1]);
-                addEdge(verPosition, nS + 1, bValues[1]);
+                addEdge(verPosition, nS + 1, bValues[2]);
                 bValues.clear();
                 continue; }      
             else {                                              // + nW nA nS nD
@@ -334,8 +347,8 @@ void Graph::Init(int numColumn, int numRow, unsigned char* imageArray)
                 ver[verPosition].maxB = *max_element(begin(bValues), end(bValues));
                 addEdge(verPosition, nA + 1, bValues[0]);
                 addEdge(verPosition, nW + 1, bValues[1]);
-                addEdge(verPosition, nS + 1, bValues[1]);
-                addEdge(verPosition, nD + 1, bValues[1]);
+                addEdge(verPosition, nS + 1, bValues[2]);
+                addEdge(verPosition, nD + 1, bValues[3]);
                 bValues.clear();
                 continue; }                              
         }
@@ -349,8 +362,8 @@ void Graph::preprocess(int s)
     // Making h of source Vertex equal to no. of vertices
     // Height of other vertices is 0.
     ver[s].h = ver.size();
-    int flow;
-    Vertex endV(0, 0, 0);
+    double flow;
+    Vertex endV(0, 0, 0, 0, 0);
 
     //
     for (unsigned int i = 0; i < adj[s].size(); i++)
@@ -378,7 +391,7 @@ void Graph::preprocess(int s)
 }
 
 // Update reverse flow for flow added on ith Edge for u
-void Graph::updateReverseEdgeFlow(int uAdj, int i, int flow)
+void Graph::updateReverseEdgeFlow(int uAdj, int i, double flow)
 {
     //    cout << "Update reverse for " << uAdj << "-->" << adj[uAdj][i].v << "with flow " << flow << endl;
     int u = adj[uAdj][i].v, v = uAdj;
@@ -415,7 +428,7 @@ bool Graph::push(int u)
 
             // Flow to be pushed is equal to minimum of
             // residual capacity of edge and excess flow.
-            int flow = min(adj[u][i].capacity,
+            double flow = min(adj[u][i].capacity,
                 ver[u].e_flow);
 
 
@@ -688,9 +701,9 @@ void MyCanvas::LoadImage(wxString fileName)
     /*
     Initialization of graph.
     */
-
     p_V = std::make_unique<Graph>(m_imageWidth* m_imageHeight + 2); //+2 for sink and source
     p_V->Init(m_imageWidth, m_imageHeight, m_myImage);
+    st2->SetLabel(wxString::Format(wxT("getSMTH = %f"), p_V->getSmth()));
 
 	// update GUI size
 	SetSize(m_imageWidth, m_imageHeight);
