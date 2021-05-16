@@ -36,6 +36,10 @@ auto bkgHist = make_histogram(axis::regular<>(15, 0, 255, "x"));
 
 
 WX_DECLARE_OBJARRAY(wxPoint, PointArray);
+PointArray bkgDots;
+PointArray objDots;
+WX_DEFINE_OBJARRAY(PointArray);
+
 
 struct Edge
 {
@@ -61,12 +65,12 @@ struct Vertex
     int name, h, e_flow, depth;
     double maxB;
 
-    Vertex(int name, int h, int e_flow)
+    Vertex(int name, int h, int e_flow, int depth=-1)
     {
         this->name = name;
         this->h = h;
         this->e_flow = e_flow;
-        //this->depth = depth;
+        this->depth = depth;
         this->maxB = -1;
     }
 };
@@ -77,7 +81,7 @@ void histogram(PointArray* obj, PointArray* bkg)
 
 }
 
-double bValue(Vertex* p, Vertex* q, int sigma = 1, int dist = 1)
+double bValue(Vertex* p, Vertex* q, int sigma = 50, int dist = 1)
 {
     return exp(-pow(p->depth - q->depth, 2) / (2 * sigma)) / dist;
 }
@@ -127,9 +131,7 @@ public:
             ver.push_back(Vertex(i, 0, 0));
             adj.push_back(vector<Edge>());
         }
-    };
-
-    void Init();
+    }
 
     // function to add an edge to graph
     void addEdge(int u, int v, int capacity)
@@ -172,7 +174,7 @@ public:
     // returns maximum flow from s to t
     int getMaxFlow(int s);
 
-
+    void Init(int numColumn, int numRow, unsigned char* imageArray);
 
     void PrintCondition()
     {
@@ -188,9 +190,158 @@ public:
     }
 };
 
-void Graph::Init()
+void Graph::Init(int numColumn, int numRow, unsigned char* imageArray)
 {
+    /* INMPORTANT : ver[0] == source, then image's vertices starting from the 1 index */
+    int numVer = numColumn * numRow;
+    int currentPixelPosition = 0; int verPosition = 0;
+    int depthPixel = 0; // r=g=b
+    
 
+    // WASD - neighbours pixels (in ver-vector)
+    int nA = 0;
+    int nW = 0;
+    int nS = 0;
+    int nD = 0;
+
+    vector <double> bValues;
+
+    for (int i = 0; i < numRow; ++i)
+    {
+        for (int j = 0; j < numColumn; ++j)
+        {
+            currentPixelPosition = numColumn * i + j; // in image => m_myImage[3*curPP] 
+            verPosition = currentPixelPosition + 1; // +1 due to [source = 0 index and name]
+            nA = currentPixelPosition-1; nW = currentPixelPosition - numColumn; 
+            nS = currentPixelPosition + numColumn; nD = currentPixelPosition + 1;
+
+            depthPixel = imageArray[3 * currentPixelPosition];
+            ver[verPosition].depth = depthPixel;
+
+            if (i == 0)
+            {
+                if (j == 0)                                     // г nS nD
+                {
+                    ver[nS+1].depth = imageArray[3 * nS];
+                    ver[nD+1].depth = imageArray[3 * nD];
+                    bValues.push_back(bValue(&ver[verPosition], &ver[nS + 1]));
+                    bValues.push_back(bValue(&ver[verPosition], &ver[nD + 1]));
+                    ver[verPosition].maxB = *max_element(begin(bValues), end(bValues));
+                    addEdge(verPosition, nS + 1, bValues[0]);
+                    addEdge(verPosition, nD + 1, bValues[1]);
+                    bValues.clear();
+                    continue; }
+                else if (j == numColumn - 1)                    // ˥ nA nS
+                {
+                    ver[nA + 1].depth = imageArray[3 * nA];
+                    ver[nS + 1].depth = imageArray[3 * nS];
+                    bValues.push_back(bValue(&ver[verPosition], &ver[nA + 1]));
+                    bValues.push_back(bValue(&ver[verPosition], &ver[nS + 1]));
+                    ver[verPosition].maxB = *max_element(begin(bValues), end(bValues));
+                    addEdge(verPosition, nA + 1, bValues[0]);
+                    addEdge(verPosition, nS + 1, bValues[1]);
+                    bValues.clear();
+                    continue; }
+                else                                            // T nA nS nD 
+                {
+                    ver[nA + 1].depth = imageArray[3 * nA];
+                    ver[nD + 1].depth = imageArray[3 * nD];
+                    ver[nS + 1].depth = imageArray[3 * nS];
+                    bValues.push_back(bValue(&ver[verPosition], &ver[nA + 1]));
+                    bValues.push_back(bValue(&ver[verPosition], &ver[nD + 1]));
+                    bValues.push_back(bValue(&ver[verPosition], &ver[nS + 1]));
+                    ver[verPosition].maxB = *max_element(begin(bValues), end(bValues));
+                    addEdge(verPosition, nA + 1, bValues[0]);
+                    addEdge(verPosition, nD + 1, bValues[1]);
+                    addEdge(verPosition, nS + 1, bValues[1]);
+                    bValues.clear();
+                    continue; }
+            }
+            else if (i == numRow - 1)
+            {
+                if (j == 0)                                     // ˪ nW nD
+                {
+                    ver[nD + 1].depth = imageArray[3 * nD];
+                    ver[nW + 1].depth = imageArray[3 * nW];
+                    bValues.push_back(bValue(&ver[verPosition], &ver[nD + 1]));
+                    bValues.push_back(bValue(&ver[verPosition], &ver[nW + 1]));
+                    ver[verPosition].maxB = *max_element(begin(bValues), end(bValues));
+                    addEdge(verPosition, nD + 1, bValues[0]);
+                    addEdge(verPosition, nW + 1, bValues[1]);
+                    bValues.clear();
+                    continue; }
+                else if (j == numColumn - 1)                    // ˩ nA nW
+                {
+                    ver[nA + 1].depth = imageArray[3 * nA];
+                    ver[nW + 1].depth = imageArray[3 * nW];
+                    bValues.push_back(bValue(&ver[verPosition], &ver[nA + 1]));
+                    bValues.push_back(bValue(&ver[verPosition], &ver[nW + 1]));
+                    ver[verPosition].maxB = *max_element(begin(bValues), end(bValues));
+                    addEdge(verPosition, nA + 1, bValues[0]);
+                    addEdge(verPosition, nW + 1, bValues[1]);
+                    bValues.clear();
+                    continue; }
+                else                                            // ⊥ nA nW nD
+                {
+                    ver[nA + 1].depth = imageArray[3 * nA];
+                    ver[nD + 1].depth = imageArray[3 * nD];
+                    ver[nW + 1].depth = imageArray[3 * nW];
+                    bValues.push_back(bValue(&ver[verPosition], &ver[nA + 1]));
+                    bValues.push_back(bValue(&ver[verPosition], &ver[nD + 1]));
+                    bValues.push_back(bValue(&ver[verPosition], &ver[nW + 1]));
+                    ver[verPosition].maxB = *max_element(begin(bValues), end(bValues));
+                    addEdge(verPosition, nA + 1, bValues[0]);
+                    addEdge(verPosition, nD + 1, bValues[1]);
+                    addEdge(verPosition, nW + 1, bValues[1]);
+                    bValues.clear();
+                    continue; }
+            }
+            else if (j == 0) {                                  // left border nW nD nS
+                ver[nS+ 1].depth = imageArray[3 * nS];
+                ver[nD + 1].depth = imageArray[3 * nD];
+                ver[nW + 1].depth = imageArray[3 * nW];
+                bValues.push_back(bValue(&ver[verPosition], &ver[nS + 1]));
+                bValues.push_back(bValue(&ver[verPosition], &ver[nD + 1]));
+                bValues.push_back(bValue(&ver[verPosition], &ver[nW + 1]));
+                ver[verPosition].maxB = *max_element(begin(bValues), end(bValues));
+                addEdge(verPosition, nS + 1, bValues[0]);
+                addEdge(verPosition, nD + 1, bValues[1]);
+                addEdge(verPosition, nW + 1, bValues[1]);
+                bValues.clear();
+                continue; } 
+            else if (j == numColumn - 1) {                      // ˧ nW nA nS
+                ver[nA + 1].depth = imageArray[3 * nA];
+                ver[nW + 1].depth = imageArray[3 * nW];
+                ver[nS + 1].depth = imageArray[3 * nS];
+                bValues.push_back(bValue(&ver[verPosition], &ver[nA + 1]));
+                bValues.push_back(bValue(&ver[verPosition], &ver[nW + 1]));
+                bValues.push_back(bValue(&ver[verPosition], &ver[nS + 1]));
+                ver[verPosition].maxB = *max_element(begin(bValues), end(bValues));
+                addEdge(verPosition, nA + 1, bValues[0]);
+                addEdge(verPosition, nW + 1, bValues[1]);
+                addEdge(verPosition, nS + 1, bValues[1]);
+                bValues.clear();
+                continue; }      
+            else {                                              // + nW nA nS nD
+                ver[nA + 1].depth = imageArray[3 * nA];
+                ver[nW + 1].depth = imageArray[3 * nW];
+                ver[nS + 1].depth = imageArray[3 * nS];
+                ver[nD + 1].depth = imageArray[3 * nD];
+                bValues.push_back(bValue(&ver[verPosition], &ver[nA + 1]));
+                bValues.push_back(bValue(&ver[verPosition], &ver[nW + 1]));
+                bValues.push_back(bValue(&ver[verPosition], &ver[nS + 1]));
+                bValues.push_back(bValue(&ver[verPosition], &ver[nD + 1]));
+                ver[verPosition].maxB = *max_element(begin(bValues), end(bValues));
+                addEdge(verPosition, nA + 1, bValues[0]);
+                addEdge(verPosition, nW + 1, bValues[1]);
+                addEdge(verPosition, nS + 1, bValues[1]);
+                addEdge(verPosition, nD + 1, bValues[1]);
+                bValues.clear();
+                continue; }                              
+        }
+    }
+
+    // source and sink has no edges with image's graph for now
 }
 
 void Graph::preprocess(int s)
@@ -464,8 +615,6 @@ public:
 	wxStaticText* st1;
 	wxStaticText* st2;
 	wxPoint penPos;
-	PointArray bkgDots;
-	PointArray objDots;
 
 protected:
 	void OnLeftDown(wxMouseEvent& event); // mouse event handler
@@ -494,7 +643,6 @@ EVT_RIGHT_DOWN(MyCanvas::OnRightDown)
 END_EVENT_TABLE()
 
 
-WX_DEFINE_OBJARRAY(PointArray);
 
 //------------------------------------------------------------------------
 MyCanvas::MyCanvas(wxWindow* parent, wxWindowID id,
@@ -541,8 +689,8 @@ void MyCanvas::LoadImage(wxString fileName)
     Initialization of graph.
     */
 
-    p_V = std::make_unique<Graph>(m_imageWidth* m_imageHeight);
-    p_V->Init();
+    p_V = std::make_unique<Graph>(m_imageWidth* m_imageHeight + 2); //+2 for sink and source
+    p_V->Init(m_imageWidth, m_imageHeight, m_myImage);
 
 	// update GUI size
 	SetSize(m_imageWidth, m_imageHeight);
@@ -568,15 +716,11 @@ void MyCanvas::SaveImage(wxString fileName)
 
 //------------------------------------------------------------------------
 void MyCanvas::ProcessImage()
-//------------------------------------------------------------------------
-// example of fast and trivial process (negative)
-// you can replace it with your own
-// you can also use methods from the wxImage class itself
 {
 	long int i = m_imageWidth * m_imageHeight * 3;
 
-	int V = 4;
-	Graph g(V);
+	//int V = 4;
+	//Graph g(V);
 
 	 //Initialize source
 	//int s = 0;
