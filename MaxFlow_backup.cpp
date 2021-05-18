@@ -74,7 +74,7 @@ public:
     int findEdge(int u, int v);
 
     void globalRelabeling();
-    void bfs(int u, int v);
+    void bfs(int start, vector<int> &distances);
 
     // returns maximum flow from s to t
     int getMaxFlow(int s);
@@ -281,41 +281,58 @@ void Graph::relabel(int u)
 //    PrintCondition();
 }
 
-// return the distance from u to v for u (u--->v will be height for u)
-void Graph::bfs(int start, int end)
+void Graph::bfs(int start, vector<int> &distances)
 {
+    //distances[start] = 0;
     vector <bool> visited(V, 0);
-    vector <int> distance(V, 0);
 
-    queue <int> q;
-    q.push(start);
+    // not queue because of the easier printing the elements
+    deque <int> deq;
+    deq.push_back(start);
+//    std::cout << "\nDeque for : " << start << endl;
+
     visited[start] = true;
     // source is 0 vertex
-    distance[start] = end==0 ? ver[0].h : 0;
+    distances[start] = start==0 ? ver[0].h : 0;
 
-    while (!q.empty())
+    int coutG = 0;
+    int index, neighbour;
+    while (!deq.empty())
     {
-        int u = q.front();
-        q.pop();
-//        cout << "from " << u << ": ";
+        int u = deq.front();
+        deq.pop_front();
 
-        for (unsigned int i=0; i<adj[u].size(); ++i)
+        for (int i=0; i<adj[u].size(); ++i)
         {
-            // If the edge presents in residual graph
-            if (adj[u][i].capacity != 0 && visited[adj[u][i].v]==false)
+            neighbour = adj[u][i].v;
+            // found residual for u->(v) through v
+            index = findEdge(neighbour, u);
+
+            if (index != -1)
             {
-                distance[adj[u][i].v] = distance[u] + 1;
-                q.push(adj[u][i].v);
-                visited[adj[u][i].v] = true;
-                if (adj[u][i].v == end) break;
-//                cout << " " << adj[u][i].v << "-h" << distance[adj[u][i].v] << " ";
+                // If the edge presents in residual graph
+                if (adj[neighbour][index].capacity != 0 && visited[neighbour]==false)
+                {
+//                    cout << neighbour << " was not visited\n";
+//                    cout << " exist residual v->u = " << neighbour << "->" << u << endl;
+                    distances[neighbour] = distances[u] + 1;
+                    deq.push_back(neighbour);
+                    visited[neighbour] = true;
+//                    cout << "d[u]=" << distances[u] << "=> d[v]=" << distances[neighbour] << "\n";
+                }
             }
         }
+
+//        coutG += 1;
+//        std::cout << "\n cout:" << coutG << std::endl;
+//        for(int n : deq) {
+//            std::cout << n << '-' << distances[n] << " ";
+//        }
 //        cout << endl;
     }
 
-//    cout << "height for u=" << start << " is " << distance[end] << endl;
-    ver[start].h = distance[end];
+    //cout << "height for u=" << start << " is " << distance[end] << endl;
+    //ver[start].h = distance[end];
 }
 
 void Graph::globalRelabeling()
@@ -324,20 +341,39 @@ void Graph::globalRelabeling()
     Запускаем бфс от каждой вершины сети, находим расстояние для неё до стока по остаточным ребрам, меняем высоту.
     Если же добраться до стока невозможно, то находим расстояние от истока до вершины и заменяем высоту на него.
  */
+//    PrintCondition();
 
     int terminal = ver.size()-1;
     int source = 0;
 
+    vector <int> sourceD(V, 0);
+    vector <int> sinkD(V, 0);
 
-    for (int i=1; i<terminal-1; ++i)
+//    auto start =  chrono::high_resolution_clock::now();
+    bfs(terminal, sinkD);
+    bfs(source, sourceD); // до какой вершины (source|sink), массив для заполнения расстояниями
+    for (int i=1; i<terminal; ++i)
     {
-//        cout << "Global RELABELING" << endl;
-        bfs(i, terminal);
-        if (! ver[i].h) bfs(i, source);
+        //cout << "Global RELABELING i=" << i << endl;
+        ver[i].h = sinkD[i];
+        //cout << "there is "<< sinkD[i] << " to sink by residual for " << ver[i].name << " then distance=" << sinkD[i];
+        if (! ver[i].h)
+        {
+            //cout << "there is "<< sinkD[i] << " to sink by residual for " << ver[i].name << " then distance=" << sourceD[i];
+            ver[i].h = sourceD[i];
+        }
 //        cout << endl;
     }
 
+//    double time_taken =
+//            chrono::duration_cast<chrono::nanoseconds>(chrono::high_resolution_clock::now() - start).count();
+//    time_taken *= 1e-9;
+//    cout << "\nGLOBAL RELABELING: " << fixed << time_taken << " seconds" << endl;
+
+//    PrintCondition();
+
 }
+
 
 // main function for printing maximum flow of graph
 int Graph::getMaxFlow(int s)
@@ -387,18 +423,18 @@ void Graph::PrintCondition()
 // Driver program to test above functions
 int main()
 {
-    //int n, m, a, b, c;
-    ////ifstream infile("C:\\Users\\Asus\\CLionProjects\\study\\graphProject\\MaxFlow-tests\\test_rl01.txt");
-    //infile >> n >> m;
-    //cout << n << " " << m << endl;
+    int n, m, a, b, c;
+    ifstream infile("C:\\Users\\Asus\\CLionProjects\\study\\graphProject\\MaxFlow-tests\\test_rl08.txt");
+    infile >> n >> m;
+    cout << n << " " << m << endl;
 
-    //Graph g(n);
+    Graph g(n);
 
-    //while (infile >> a >> b >> c)
-    //{
+    while (infile >> a >> b >> c)
+    {
 //        cout << a-1 << "->" << b-1 << " = " << c << endl;
-        //g.add/*Edge(a-1, b-1, c);
-    //}
+        g.addEdge(a-1, b-1, c);
+    }
 
 //    cin >> n >> m;
 //    Graph g(n);
@@ -410,8 +446,8 @@ int main()
 //        g.addEdge(a, b, c);
 //    }
 //    int V = 6;
-    int V = 4;
-    Graph g(V);
+//    int V = 4;
+//    Graph g(V);
 //
 //    g.addEdge(0, 1, 16);
 //    g.addEdge(0, 1, 2);
@@ -436,11 +472,11 @@ int main()
 //    g.addEdge(4, 5, 4);
 
 
-    g.addEdge(0, 1, 2);
-    g.addEdge(0, 2, 4);
-    g.addEdge(1, 3, 1);
-    g.addEdge(2, 3, 5);
-    g.addEdge(1, 2, 3);
+//    g.addEdge(0, 1, 2);
+//    g.addEdge(0, 2, 4);
+//    g.addEdge(1, 3, 1);
+//    g.addEdge(2, 3, 5);
+//    g.addEdge(1, 2, 3);
 
     // Initialize source
     int s = 0;

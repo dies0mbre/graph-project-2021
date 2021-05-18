@@ -18,7 +18,9 @@
 
 #include <vector>
 #include <iostream>
+#include <fstream>
 #include <queue>
+#include <deque>
 #include <cmath>
 #include <boost/histogram.hpp>
 #include <boost/format.hpp>
@@ -28,7 +30,9 @@ using std::vector;
 using std::cout;
 using std::endl;
 using std::queue;
+using std::deque;
 using std::min;
+using std::ifstream;
 #define APP_NAME "Image Segmentation"
 
 auto objHist = make_histogram(axis::regular<>(8, 0, 255, "x"));
@@ -157,9 +161,9 @@ public:
         ver[positionInVer].label = label;
     }
 
-    double getSmth()
+    int getV()
     {
-        return ver[0].depth;
+        return V;
     }
     
     // function to add an edge to graph
@@ -189,10 +193,11 @@ public:
     }
 
     void globalRelabeling();
-    void bfs(int u, int v);
+    void bfs(int start, vector<int>& distances);
 
     // returns maximum flow from s to t
-    int getMaxFlow(int s);
+    double getMaxFlow(int s);
+    void minCut(vector <Vertex*>& mincut);
 
     void Init(int numColumn, int numRow, unsigned char* imageArray);
     void contactWithTerminals();
@@ -529,63 +534,104 @@ void Graph::relabel(int u)
     //    PrintCondition();
 }
 
-// return the distance from u to v for u (u--->v will be height for u)
-void Graph::bfs(int start, int end)
+void Graph::minCut(vector <Vertex*>& mincut)
 {
+    int start = 0;
     vector <bool> visited(V, 0);
-    vector <int> distance(V, 0);
 
-    queue <int> q;
-    q.push(start);
+    deque <int> deq;
+    deq.push_back(start);
+    mincut.push_back(&ver[start]);
     visited[start] = true;
-    // source is 0 vertex
-    distance[start] = end == 0 ? ver[0].h : 0;
 
-    while (!q.empty())
+    int neighbour;
+    while (!deq.empty())
     {
-        int u = q.front();
-        q.pop();
-        //        cout << "from " << u << ": ";
-
-        for (unsigned int i = 0; i < adj[u].size(); ++i)
+        int u = deq.front();
+        deq.pop_front();
+        for (int i = 0; i < adj[u].size(); ++i)
         {
-            // If the edge presents in residual graph
-            if (adj[u][i].capacity != 0 && visited[adj[u][i].v] == false)
+            neighbour = adj[u][i].v;
+            //            cout << "adj[" << u << "][" << i << "].capacity = " << fixed << adj[u][i].capacity << endl;
+            if (adj[u][i].capacity > 0.0 && visited[neighbour] == false)
             {
-                distance[adj[u][i].v] = distance[u] + 1;
-                q.push(adj[u][i].v);
-                visited[adj[u][i].v] = true;
-                if (adj[u][i].v == end) break;
-                //                cout << " " << adj[u][i].v << "-h" << distance[adj[u][i].v] << " ";
+                //                cout << " and its unvisited neighbour : " << neighbour << endl;
+                deq.push_back(neighbour);
+                mincut.push_back(&ver[neighbour]);
+                visited[neighbour] = true;
             }
         }
-        //        cout << endl;
     }
 
-    //    cout << "height for u=" << start << " is " << distance[end] << endl;
-    ver[start].h = distance[end];
+}
+
+
+void Graph::bfs(int start, vector<int>& distances)
+{
+    //distances[start] = 0;
+    vector <bool> visited(V, 0);
+
+    // not queue because of the easier printing the elements
+    deque <int> deq;
+    deq.push_back(start);
+
+    visited[start] = true;
+    // source is 0 vertex
+    distances[start] = start == 0 ? ver[0].h : 0;
+
+    int coutG = 0;
+    int index, neighbour;
+    while (!deq.empty())
+    {
+        int u = deq.front();
+        deq.pop_front();
+
+        for (int i = 0; i < adj[u].size(); ++i)
+        {
+            neighbour = adj[u][i].v;
+            // found residual for u->(v) through v
+            index = findEdge(neighbour, u);
+
+            if (index != -1)
+            {
+                // If the edge presents in residual graph
+                if (adj[neighbour][index].capacity != 0 && visited[neighbour] == false)
+                {
+                    distances[neighbour] = distances[u] + 1;
+                    deq.push_back(neighbour);
+                    visited[neighbour] = true;
+                }
+            }
+        }
+    }
 }
 
 void Graph::globalRelabeling()
 {
- 
+    /*
+        Запускаем бфс от каждой вершины сети, находим расстояние для неё до стока по остаточным ребрам, меняем высоту.
+        Если же добраться до стока невозможно, то находим расстояние от истока до вершины и заменяем высоту на него.
+     */
 
     int terminal = ver.size() - 1;
     int source = 0;
 
+    vector <int> sourceD(V, 0);
+    vector <int> sinkD(V, 0);
 
-    for (int i = 1; i < terminal - 1; ++i)
+    bfs(terminal, sinkD);
+    bfs(source, sourceD); // до какой вершины (source|sink), массив для заполнения расстояниями
+    for (int i = 1; i < terminal; ++i)
     {
-        //        cout << "Global RELABELING" << endl;
-        bfs(i, terminal);
-        if (!ver[i].h) bfs(i, source);
-        //        cout << endl;
+        ver[i].h = sinkD[i];
+        if (!ver[i].h) ver[i].h = sourceD[i];
     }
 
 }
 
+
 // main function for printing maximum flow of graph
-int Graph::getMaxFlow(int s)
+double Graph::getMaxFlow(int s)
 {
     int countGB = 0;
     preprocess(s);
@@ -722,7 +768,7 @@ void MyCanvas::LoadImage(wxString fileName)
     */
     p_V = std::make_unique<Graph>(m_imageWidth* m_imageHeight + 2); //+2 for sink and source
     p_V->Init(m_imageWidth, m_imageHeight, m_myImage);
-    st2->SetLabel(wxString::Format(wxT("getSMTH = %f"), p_V->getSmth()));
+    st2->SetLabel(wxString::Format(wxT("getSMTH = %f"), p_V->getV()));
 
 	// update GUI size
 	SetSize(m_imageWidth, m_imageHeight);
@@ -754,24 +800,24 @@ void MyCanvas::ProcessImage()
     computeHistogram();
     p_V->contactWithTerminals();
 
-	//int V = 4;
-	//Graph g(V);
+    
+    st1->SetLabel(wxString::Format(wxT("maxFlow: %f"), p_V->getMaxFlow(0)));
 
-	 //Initialize source
-	//int s = 0;
-	//int maxFlow = g.getMaxFlow(s);
-
-	// initial colors for a pixel under mouce clicked object
-	//st1->SetLabel(wxString::Format(wxT("0 item: (%d, %d) then place is %d and color is %d %d %d"), objDots[0].first.x,
-	//	objDots[0].first.y, objDots[0].first.y * m_imageWidth + objDots[0].first.x,
-	//	m_myImage[3 * (objDots[0].first.y * m_imageWidth + objDots[0].first.x)],
-	//	m_myImage[3 * (objDots[0].first.y * m_imageWidth + objDots[0].first.x) + 1],
-	//	m_myImage[3 * (objDots[0].first.y * m_imageWidth + objDots[0].first.x) + 2]));
-
-	//st2->SetLabel(wxString::Format(wxT("maxFlow = %d"), maxFlow));
-
-    p_V->getMaxFlow(0);
-    st2->SetLabel(wxString::Format(wxT("Oh")));
+    vector <Vertex*> mincut;
+    p_V->minCut(mincut);
+    st2->SetLabel(wxString::Format(wxT("mincut : %d/%d"), mincut.size(), p_V->getV()));
+    
+    /*
+    int n, m, a, b, c;
+    ifstream infile("C:\\Users\\Asus\\CLionProjects\\study\\graphProject\\MaxFlow-tests\\test_rd07.txt");
+    infile >> n >> m;
+    Graph g(n);
+    while (infile >>a >> b >> c)
+    {
+        g.addEdge(a - 1, b - 1, c);
+    }
+    st2->SetLabel(wxString::Format(wxT("maxFlow: %f"), g.getMaxFlow(0)));
+    */
 
 	// m_myImage is a monodimentional vector of pixels (RGBRGB...)
 	while (i--)
