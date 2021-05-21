@@ -22,6 +22,8 @@
 #include <queue>
 #include <deque>
 #include <cmath>
+#include <memory>
+#include <map>
 #include <boost/histogram.hpp>
 #include <boost/format.hpp>
 using namespace boost::histogram;
@@ -35,13 +37,47 @@ using std::min;
 using std::ifstream;
 #define APP_NAME "Image Segmentation"
 
-auto objHist = make_histogram(axis::regular<>(8, 0, 255, "x"));
-auto bkgHist = make_histogram(axis::regular<>(8, 0, 255, "x"));
-
 // std::pair <wxPoint, 
 vector <int> bkgDots;
 vector <int> objDots;
+int maxProb = 0;
 
+
+struct Histogram
+{
+    Histogram(size_t n, int low, double high)
+    {
+        int x = low;
+        double dx = (high - low) / n;
+        while (x <= high) { _bins[x] = 0; x += dx; }
+    }
+    void fill(std::vector <int> &values)
+    {
+        for (int val : values)
+        {
+            if (val < _bins.begin()->first || val > _bins.rbegin()->first)
+                return;
+
+            std::prev(_bins.upper_bound(val))->second++;
+        }
+    }
+
+    int at(int depth) // return the number of values in bin for depth=value
+    {
+        if (depth == 0) return _bins[0];
+        return (std::prev(_bins.lower_bound(depth)))->second;
+    }
+
+    void print(std::ostream& o) const
+    {
+        for (auto b1 = _bins.begin(), b2 = std::next(b1);
+            b2 != _bins.end(); ++b1, ++b2)
+            o << b1->first << "\t- " << b2->first << ":\t"
+            << std::string(b1->second, '*')
+            << std::endl;
+    }
+    std::map<int, size_t> _bins;
+};
 
 struct Edge
 {
@@ -73,41 +109,8 @@ struct Vertex
 };
 
 
-void computeHistogram()
-{
-    objHist.fill(objDots);
-    bkgHist.fill(bkgDots);
 
-    /* access to the number of values in the bin    
-    std::cout << int(objHist.at(objHist.axis(0).index(90))) << std::endl;
-    std::cout << objHist.at(bkgHist.axis(0).index(120)) << std::endl;*/
-}
-
-
-double probabilityValue(int depth, int area, int lambda = 50) // area: 0 - obj, bkg - 1
-{
-    double probObj = double(objHist.at(objHist.axis(0).index(depth))) / objDots.size();
-    double probBkg = double(bkgHist.at(bkgHist.axis(0).index(depth))) / bkgDots.size();
-    double sumProb = probObj + probBkg;
-
-    if (sumProb < 1.0e-10 || probObj < 1.0e-10 || probBkg < 1.0e-10) //==0
-    {
-        return 150.0; // as double max
-    }
-
-    // with normalization
-    if (area) // bkg
-    {
-        return -lambda * log(probBkg / sumProb);
-    }
-    else // obj
-    {
-        return -lambda * log(probObj / sumProb);
-    }
-}
-
-
-double bValue(Vertex* p, Vertex* q, int sigma = 50, int dist = 1)
+double bValue(Vertex* p, Vertex* q, int sigma = 20, int dist = 1)
 {
     return exp(-pow(p->depth - q->depth, 2) / (2 * pow(sigma, 2))) / dist;
 }
@@ -137,7 +140,8 @@ class Graph
     void updateReverseEdgeFlow(int uAdj, int i, double flow);
 
 public:
-    Graph(int V) {
+
+    Graph(int V) : objHist(nullptr), bkgHist(nullptr) {
         this->V = V;
 
         // all vertices are initialized with 0 height
@@ -198,6 +202,19 @@ public:
 
     void Init(int numColumn, int numRow, unsigned char* imageArray);
     void contactWithTerminals();
+
+    std::unique_ptr<Histogram> objHist;
+    std::unique_ptr<Histogram> bkgHist;
+
+    void computeHistogram()
+    {
+        objHist = std::make_unique<Histogram>(log(objDots.size()) + 1, 0, 255);
+        bkgHist = std::make_unique<Histogram>(log(bkgDots.size()) + 1, 0, 255);
+        objHist->fill(objDots);
+        bkgHist->fill(bkgDots);
+    }
+
+    double probabilityValue(int depth, int area, int lambda=10);
 
     void PrintCondition()
     {
@@ -394,6 +411,30 @@ void Graph::contactWithTerminals()
         }
     }
 }
+
+
+double Graph::probabilityValue(int depth, int area, int lambda) // area: 0 - obj, bkg - 1; int lambda = 50
+{
+    double probObj = double(objHist->at(depth)) / objDots.size();
+    double probBkg = double(bkgHist->at(depth)) / bkgDots.size();
+    double sumProb = probObj + probBkg;
+
+    if (sumProb < 1.0e-10 || probObj < 1.0e-10 || probBkg < 1.0e-10) //==0
+    {
+        return 1000; // as double max
+    }
+
+    // with normalization
+    if (area) // bkg
+    {
+        return -lambda * log(probBkg / sumProb);
+    }
+    else // obj
+    {
+        return -lambda * log(probObj / sumProb);
+    }
+}
+
 
 void Graph::preprocess(int s)
 {
@@ -797,7 +838,12 @@ void MyCanvas::ProcessImage()
 {
 	long int i = m_imageWidth * m_imageHeight * 3;
 
-    computeHistogram();
+    p_V->computeHistogram();
+
+    //access to the number of values in the bin
+    st1->SetLabel(wxString::Format(wxT("after compute histogram:%d"), p_V->objHist->at(0)));
+    st2->SetLabel(wxString::Format(wxT("hist check: %d"), p_V->objHist->at(255)));
+
     p_V->contactWithTerminals();
 
     
