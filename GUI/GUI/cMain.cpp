@@ -91,13 +91,9 @@ struct Edge
     // vertex as v.
     int u, v;
 
-    Edge(double flow, double capacity, int u, int v)
-    {
-        this->flow = flow;
-        this->capacity = capacity;
-        this->u = u;
-        this->v = v;
-    }
+    int pair; // adj[v][pair] == adj[vu]
+
+    Edge(double flow, double capacity, int u, int v) : flow(flow), capacity(capacity), u(u), v(v), pair(-1) {}
 };
 
 // Represent a Vertex
@@ -123,6 +119,8 @@ double bValue(Vertex* p, Vertex* q, int sigma = 20, int dist = 1)
 class Graph
 {
     int V; // No. of vertices
+    int E; // No. of edges 
+
     vector<Vertex> ver;
     // adjacency list of residual graph
     vector< vector<Edge> > adj;
@@ -148,6 +146,7 @@ public:
 
     Graph(int V) : objHist(nullptr), bkgHist(nullptr), probabilityValueMax(0){
         this->V = V;
+        this->E = 0;
 
         // all vertices are initialized with 0 height
         // and 0 excess flow
@@ -179,6 +178,12 @@ public:
         {
             adj[u].push_back(Edge(0, capacity, u, v));
             adj[v].push_back(Edge(0, capacity, v, u));
+
+            (adj[u][adj[u].size() - 1]).pair = adj[v].size() - 1;
+            (adj[v][adj[v].size() - 1]).pair = adj[u].size() - 1;
+
+            E += 1; // as in non-directed graph
+
         }
     }
 
@@ -474,16 +479,8 @@ void Graph::preprocess(int s)
 void Graph::updateReverseEdgeFlow(int uAdj, int i, double flow)
 {
     //    cout << "Update reverse for " << uAdj << "-->" << adj[uAdj][i].v << "with flow " << flow << endl;
-    int u = adj[uAdj][i].v, v = uAdj;
-
-    for (unsigned int j = 0; j < adj[u].size(); j++)
-    {
-        if (adj[u][j].v == v)
-        {
-            adj[u][j].capacity += flow;
-            return;
-        }
-    }
+    int u = adj[uAdj][i].v;
+    adj[u][adj[uAdj][i].pair].capacity += flow;
 }
 
 // To push flow from overflowing vertex u
@@ -624,7 +621,7 @@ void Graph::bfs(int start, vector<int>& distances)
     distances[start] = start == 0 ? ver[0].h : 0;
 
     int coutG = 0;
-    int index, neighbour;
+    int neighbour;
     while (!deq.empty())
     {
         int u = deq.front();
@@ -633,18 +630,13 @@ void Graph::bfs(int start, vector<int>& distances)
         for (int i = 0; i < adj[u].size(); ++i)
         {
             neighbour = adj[u][i].v;
-            // found residual for u->(v) through v
-            index = findEdge(neighbour, u);
 
-            if (index != -1)
+            // found residual for u->(v) through v : adj[neighbour][adj[u][i].pair] = adj[vu]
+            if (adj[neighbour][adj[u][i].pair].capacity != 0 && visited[neighbour] == false)
             {
-                // If the edge presents in residual graph
-                if (adj[neighbour][index].capacity != 0 && visited[neighbour] == false)
-                {
-                    distances[neighbour] = distances[u] + 1;
-                    deq.push_back(neighbour);
-                    visited[neighbour] = true;
-                }
+                distances[neighbour] = distances[u] + 1;
+                deq.push_back(neighbour);
+                visited[neighbour] = true;
             }
         }
     }
@@ -678,7 +670,6 @@ void Graph::globalRelabeling()
 double Graph::getMaxFlow(int s)
 {
     int countGB = 0;
-    int eSize = adj.size();
     preprocess(s);
 
     ofstream log;
@@ -691,7 +682,7 @@ double Graph::getMaxFlow(int s)
         int u = active.front()->name;
         if (!push(u))
         {
-            if (countGB % (V + eSize)) //countGB%(3*V)
+            if (countGB % (V + E)) //countGB%(3*V)
             {
                 relabel(u);
                 countGB += 1;
