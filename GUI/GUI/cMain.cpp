@@ -24,9 +24,12 @@
 #include <cmath>
 #include <memory>
 #include <map>
+#include <chrono>
 #include <boost/histogram.hpp>
 #include <boost/format.hpp>
 using namespace boost::histogram;
+using namespace std;
+using namespace std::chrono;
 
 using std::vector;
 using std::cout;
@@ -126,6 +129,8 @@ class Graph
 
     queue <Vertex*> active;
 
+    double probabilityValueMax;
+
     // Function to push excess flow from u
     bool push(int u);
 
@@ -141,7 +146,7 @@ class Graph
 
 public:
 
-    Graph(int V) : objHist(nullptr), bkgHist(nullptr) {
+    Graph(int V) : objHist(nullptr), bkgHist(nullptr), probabilityValueMax(0){
         this->V = V;
 
         // all vertices are initialized with 0 height
@@ -157,10 +162,7 @@ public:
         ver[positionInVer].label = label;
     }
 
-    int getV()
-    {
-        return V;
-    }
+    int getV() { return V; }
 
     int getLabel(int verPosition)
     {
@@ -419,9 +421,12 @@ double Graph::probabilityValue(int depth, int area, int lambda) // area: 0 - obj
     double probBkg = double(bkgHist->at(depth)) / bkgDots.size();
     double sumProb = probObj + probBkg;
 
+    probabilityValueMax = probObj > probabilityValueMax ? probObj : probabilityValueMax;
+    probabilityValueMax = probBkg > probabilityValueMax ? probBkg : probabilityValueMax;
+
     if (sumProb < 1.0e-10 || probObj < 1.0e-10 || probBkg < 1.0e-10) //==0
     {
-        return 1000; // as double max
+        return 100*probabilityValueMax; // as double max
     }
 
     // with normalization
@@ -673,14 +678,20 @@ void Graph::globalRelabeling()
 double Graph::getMaxFlow(int s)
 {
     int countGB = 0;
+    int eSize = adj.size();
     preprocess(s);
+
+    ofstream log;
+    log.open("log.txt", std::ios_base::app);
+
+
     // loop until none of the Vertex is active
     while (!active.empty())
     {
         int u = active.front()->name;
         if (!push(u))
         {
-            if (countGB % V) //countGB%(3*V)
+            if (countGB % (V + eSize)) //countGB%(3*V)
             {
                 relabel(u);
                 countGB += 1;
@@ -688,12 +699,23 @@ double Graph::getMaxFlow(int s)
             else
             {
                 //                cout << "else Gb=" << countGB << endl;
+
+
+                auto start = chrono::high_resolution_clock::now();
+
                 globalRelabeling();
+
+                auto end = chrono::high_resolution_clock::now();
+                double time_taken = chrono::duration_cast<chrono::nanoseconds>(end - start).count();
+                time_taken *= 1e-9;
+                log << time_taken << "\n\n";
+
                 countGB += 1;
             }
         }
     }
 
+    log.close();
     // ver.back() returns last Vertex, whose
     // e_flow will be final maximum flow
     return ver.back().e_flow;
@@ -731,11 +753,20 @@ public:
 
 	wxStaticText* st1;
 	wxStaticText* st2;
-	wxPoint penPos;
+    wxStaticText* st3;
+
+    void OnLeftMove(wxMouseEvent& event);
+    void OnLeftDown(wxMouseEvent& event); // mouse event handler
+    void OnLeftUp(wxMouseEvent& event);    
+    
+    void OnRightDown(wxMouseEvent& event);
 
 protected:
-	void OnLeftDown(wxMouseEvent& event); // mouse event handler
-	void OnRightDown(wxMouseEvent& event);
+    bool isLeftDown;
+    bool isRightDown;
+    wxPoint penPos;
+
+
 private:
 	int m_imageWidth;
 	int m_imageHeight;
@@ -746,7 +777,6 @@ private:
     std::unique_ptr<Graph> p_V; // pointer on representation of image via graph
 
 	void OnPaint(wxPaintEvent& event);
-	// void OnLeftMouceClicked(wxMouseEvent& event);
 
     friend class Graph;
 
@@ -754,9 +784,11 @@ private:
 };
 
 BEGIN_EVENT_TABLE(MyCanvas, wxPanel)
-EVT_PAINT(MyCanvas::OnPaint)
-EVT_LEFT_DOWN(MyCanvas::OnLeftDown)
-EVT_RIGHT_DOWN(MyCanvas::OnRightDown)
+    EVT_PAINT(MyCanvas::OnPaint)
+    EVT_LEFT_DOWN(MyCanvas::OnLeftDown)
+    EVT_LEFT_UP(MyCanvas::OnLeftUp)
+    EVT_RIGHT_DOWN(MyCanvas::OnRightDown)
+    EVT_MOTION(MyCanvas::OnLeftMove)
 END_EVENT_TABLE()
 
 
@@ -769,8 +801,12 @@ MyCanvas::MyCanvas(wxWindow* parent, wxWindowID id,
 {
 	st1 = new wxStaticText(this, -1, wxT("X"), wxPoint(10, 10));
 	st2 = new wxStaticText(this, -1, wxT("Y"), wxPoint(10, 30));
+    st3 = new wxStaticText(this, -1, wxT("Z"), wxPoint(10, 50));
 	m_myImage = NULL;
 	m_imageRGB = NULL;
+    isLeftDown = false;
+    isRightDown = false;
+
 }
 
 //------------------------------------------------------------------------
@@ -809,7 +845,7 @@ void MyCanvas::LoadImage(wxString fileName)
     */
     p_V = std::make_unique<Graph>(m_imageWidth* m_imageHeight + 2); //+2 for sink and source
     p_V->Init(m_imageWidth, m_imageHeight, m_myImage);
-    st2->SetLabel(wxString::Format(wxT("getSMTH = %d"), p_V->getV()));
+    st2->SetLabel(wxString::Format(wxT("V = %d"), p_V->getV()));
 
 	// update GUI size
 	SetSize(m_imageWidth, m_imageHeight);
@@ -839,42 +875,26 @@ void MyCanvas::ProcessImage()
 	long int i = m_imageWidth * m_imageHeight * 3;
 
     p_V->computeHistogram();
-
-    //access to the number of values in the bin
-    st1->SetLabel(wxString::Format(wxT("after compute histogram:%d"), p_V->objHist->at(0)));
-    st2->SetLabel(wxString::Format(wxT("hist check: %d"), p_V->objHist->at(255)));
-
     p_V->contactWithTerminals();
 
-    
-    st1->SetLabel(wxString::Format(wxT("maxFlow: %f"), p_V->getMaxFlow(0)));
 
+auto start = chrono::high_resolution_clock::now();
+
+    st1->SetLabel(wxString::Format(wxT("MaxFlow = %f"), p_V->getMaxFlow(0)));      
+
+auto end = chrono::high_resolution_clock::now();
+double time_taken =
+    chrono::duration_cast<chrono::nanoseconds>(end - start).count();
+
+time_taken *= 1e-9;
+    st2->SetLabel(wxString::Format(wxT("Time MF: %f"), time_taken));
+    
     vector <Vertex*> mincut;
     p_V->minCut(mincut);
-    st2->SetLabel(wxString::Format(wxT("mincut : %d/%d"), mincut.size(), p_V->getV()));
-    
-    /*
-    int n, m, a, b, c;
-    ifstream infile("C:\\Users\\Asus\\CLionProjects\\study\\graphProject\\MaxFlow-tests\\test_rd07.txt");
-    infile >> n >> m;
-    Graph g(n);
-    while (infile >>a >> b >> c)
-    {
-        g.addEdge(a - 1, b - 1, c);
-    }
-    st2->SetLabel(wxString::Format(wxT("maxFlow: %f"), g.getMaxFlow(0)));
-    */
-
-	// m_myImage is a monodimentional vector of pixels (RGBRGB...)
+    st3->SetLabel(wxString::Format(wxT("mincut : %d/%d"), mincut.size(), p_V->getV()));
 
     int label = 2;
     int position = 0;
-
-    /*for (unsigned int j = 0; j < i; j += 3)
-    {
-        label = p_V->ver[].label;
-        m_myImage[j] = ver[]
-    }*/
 
     for (unsigned int j = 0; j < m_imageHeight; ++j)
     {
@@ -887,9 +907,6 @@ void MyCanvas::ProcessImage()
             m_myImage[3*position+2] = label == 0 ? 255 : 0;
         }
     }
-
-	/*while (i--)
-		m_myImage[i] = 255 - m_myImage[i];*/
 
 	Refresh(false); // update display
 }
@@ -920,39 +937,57 @@ void MyCanvas::OnPaint(wxPaintEvent& WXUNUSED(event))
 	}
 }
 
+//The left mouse button movement event processing
+void MyCanvas::OnLeftMove(wxMouseEvent& event)
+{
+    if (isLeftDown && event.Dragging()) {
+        wxPoint mPos = event.GetPosition();
+        wxClientDC dc(this);
+        dc.SetPen(*wxWHITE_PEN);
+        dc.DrawLine(mPos, penPos);
+        dc.SetPen(wxNullPen);
+        penPos = mPos;
+        p_V->setLabelVertex(penPos.y * m_imageWidth + penPos.x + 1, 0);
+        objDots.push_back(m_myImage[3 * (penPos.y * m_imageWidth + penPos.x)]);
+        st1->SetLabel(wxString::Format(wxT("x: %d"), penPos.x));
+        st2->SetLabel(wxString::Format(wxT("y: %d"), penPos.y));
+    }
+    else if (isRightDown && event.Dragging()) {
+        wxPoint mPos = event.GetPosition();
+        wxClientDC dc(this);
+        dc.SetPen(*wxBLACK_PEN);
+        dc.DrawLine(mPos, penPos);
+        dc.SetPen(wxNullPen);
+        penPos = mPos;
+        p_V->setLabelVertex(penPos.y * m_imageWidth + penPos.x + 1, 1);
+        bkgDots.push_back(m_myImage[3 * (penPos.y * m_imageWidth + penPos.x)]);
+        st1->SetLabel(wxString::Format(wxT("x: %d"), penPos.x));
+        st2->SetLabel(wxString::Format(wxT("y: %d"), penPos.y));
+    }
+}
+
+
 // for objects used white dots
 void MyCanvas::OnLeftDown(wxMouseEvent& event)
 {
-	if (event.LeftDown()) {
-		penPos = event.GetPosition();
-		wxClientDC dc(this);
-		dc.SetPen(*wxWHITE_PEN);
-		dc.DrawPoint(penPos);
-		dc.SetPen(wxNullPen);
-		st1->SetLabel(wxString::Format(wxT("x: %d"), penPos.x));
-		st2->SetLabel(wxString::Format(wxT("y: %d"), penPos.y));
-
-        p_V->setLabelVertex(penPos.y * m_imageWidth + penPos.x + 1, 0);
-        objDots.push_back(m_myImage[3 * (penPos.y * m_imageWidth + penPos.x)]);
-	}
+    isLeftDown = true;
+    penPos = event.GetPosition();
 }
 
 // for background used black dots
 void MyCanvas::OnRightDown(wxMouseEvent& event)
 {
-	if (event.RightDown()) {
-		penPos = event.GetPosition();
-		wxClientDC dc(this);
-		dc.SetPen(*wxBLACK_PEN);
-		dc.DrawPoint(penPos);
-		dc.SetPen(wxNullPen);
-		st1->SetLabel(wxString::Format(wxT("x: %d"), penPos.x));
-		st2->SetLabel(wxString::Format(wxT("y: %d"), penPos.y));
-        // bkgDots.push_back(std::make_pair(penPos, m_myImage[3 * (penPos.y * m_imageWidth + penPos.x)]));
-        p_V->setLabelVertex(penPos.y * m_imageWidth + penPos.x + 1, 1);
-		bkgDots.push_back(m_myImage[3 * (penPos.y * m_imageWidth + penPos.x)]);
-	}
+    isRightDown = true;
+    penPos = event.GetPosition();
 }
+
+void MyCanvas::OnLeftUp(wxMouseEvent& event)
+{
+    isLeftDown = false;
+}
+
+
+
 
 //************************************************************************
 //************************************************************************
@@ -966,7 +1001,7 @@ class MyFrame : public wxFrame
 {
 public:
 	MyFrame(const wxString& title, const wxPoint& pos, const wxSize& size);
-
+	MyCanvas* m_canvas; // the canvas inside the main frame
 	// Event handlers
 protected:
 	void OnQuit(wxCommandEvent& event);
@@ -976,8 +1011,6 @@ protected:
 	void OnProcessImage(wxCommandEvent& WXUNUSED(event));
 	void OnClose(wxCloseEvent& event);
 	void OnBestSize(wxCommandEvent& WXUNUSED(event));
-
-	MyCanvas* m_canvas; // the canvas inside the main frame
 	bool m_imageLoaded;
 	DECLARE_EVENT_TABLE()
 };
