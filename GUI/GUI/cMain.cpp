@@ -68,16 +68,8 @@ struct Vertex
     // label = 0-object, 1-bkg, 2-unknown
     double maxB, e_flow;
 
-    Vertex(int name, int h, double e_flow, int x, int y, int label = 2, int depth=-1)
-    {
-        this->name = name;
-        this->h = h;
-        this->e_flow = e_flow;
-        this->depth = depth;
-        this->maxB = -1;
-        this->pixelX = x;
-        this->pixelY = y;
-    }
+    Vertex(int name, int h, double e_flow, int x, int y, int label = 2, int depth = -1) :
+       name(name),  h(h), e_flow(e_flow), depth(depth), pixelX(x), pixelY(y), label(label) {}
 };
 
 
@@ -151,7 +143,7 @@ public:
         // all vertices are initialized with 0 height
         // and 0 excess flow
         for (int i = 0; i < V; i++) {
-            ver.push_back(Vertex(i, 0, 0, 0, 0));
+            ver.push_back(Vertex(i, 0, 0, 0, 0, 2));
             adj.push_back(vector<Edge>());
         }
     }
@@ -164,6 +156,11 @@ public:
     int getV()
     {
         return V;
+    }
+
+    int getLabel(int verPosition)
+    {
+        return ver[verPosition].label;
     }
     
     // function to add an edge to graph
@@ -558,6 +555,7 @@ void Graph::minCut(vector <Vertex*>& mincut)
                 //                cout << " and its unvisited neighbour : " << neighbour << endl;
                 deq.push_back(neighbour);
                 mincut.push_back(&ver[neighbour]);
+                ver[neighbour].label = 0;
                 visited[neighbour] = true;
             }
         }
@@ -762,13 +760,15 @@ void MyCanvas::LoadImage(wxString fileName)
 
 	m_myImage = (unsigned char*)malloc(m_imageWidth * m_imageHeight * 3);
 	memcpy(m_myImage, m_imageRGB->GetData(), m_imageWidth * m_imageHeight * 3);
+    st1->SetLabel(wxString::Format(wxT("m_imageWidth = %d"), m_imageWidth));
+    st2->SetLabel(wxString::Format(wxT("m_imageHeight = %d"), m_imageHeight));
 
     /*
     Initialization of graph.
     */
     p_V = std::make_unique<Graph>(m_imageWidth* m_imageHeight + 2); //+2 for sink and source
     p_V->Init(m_imageWidth, m_imageHeight, m_myImage);
-    st2->SetLabel(wxString::Format(wxT("getSMTH = %f"), p_V->getV()));
+    st2->SetLabel(wxString::Format(wxT("getSMTH = %d"), p_V->getV()));
 
 	// update GUI size
 	SetSize(m_imageWidth, m_imageHeight);
@@ -820,8 +820,30 @@ void MyCanvas::ProcessImage()
     */
 
 	// m_myImage is a monodimentional vector of pixels (RGBRGB...)
-	while (i--)
-		m_myImage[i] = 255 - m_myImage[i];
+
+    int label = 2;
+    int position = 0;
+
+    /*for (unsigned int j = 0; j < i; j += 3)
+    {
+        label = p_V->ver[].label;
+        m_myImage[j] = ver[]
+    }*/
+
+    for (unsigned int j = 0; j < m_imageHeight; ++j)
+    {
+        for (unsigned int k = 0; k < m_imageWidth; ++k)
+        {
+            position = m_imageWidth * j + k;
+            label = p_V->getLabel(position + 1);
+            m_myImage[3*position] = label == 0 ? 255 : 0;
+            m_myImage[3*position+1] = label == 0 ? 255 : 0;
+            m_myImage[3*position+2] = label == 0 ? 255 : 0;
+        }
+    }
+
+	/*while (i--)
+		m_myImage[i] = 255 - m_myImage[i];*/
 
 	Refresh(false); // update display
 }
