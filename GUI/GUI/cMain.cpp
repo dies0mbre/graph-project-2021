@@ -40,6 +40,10 @@ using std::min;
 using std::ifstream;
 #define APP_NAME "Image Segmentation"
 
+const unsigned int _SIGMA = 5;
+const unsigned int _LAMBDA = 20; // for moon with 47 only segmentation
+
+
 // std::pair <wxPoint, 
 vector <int> bkgDots;
 vector <int> objDots;
@@ -109,7 +113,7 @@ struct Vertex
 
 
 
-double bValue(Vertex* p, Vertex* q, int sigma = 20, int dist = 1)
+double bValue(Vertex* p, Vertex* q, int sigma = _SIGMA, int dist = 1)
 {
     return exp(-pow(p->depth - q->depth, 2) / (2 * pow(sigma, 2))) / dist;
 }
@@ -221,7 +225,7 @@ public:
         bkgHist->fill(bkgDots);
     }
 
-    double probabilityValue(int depth, int area, int lambda=10);
+    double probabilityValue(int depth, int area, int lambda=_LAMBDA);
 
     void PrintCondition()
     {
@@ -818,6 +822,8 @@ void MyCanvas::LoadImage(wxString fileName)
 		free(m_myImage);
 	if (m_imageRGB)
 		delete m_imageRGB;
+
+    //if (p_V) p_V.reset();
 
 	// open image dialog box
 	m_imageRGB = new wxImage(fileName, wxBITMAP_TYPE_ANY, -1); // ANY => can load many image formats
