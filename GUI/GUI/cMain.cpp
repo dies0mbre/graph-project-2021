@@ -40,11 +40,13 @@ using std::min;
 using std::ifstream;
 #define APP_NAME "Image Segmentation"
 
-const unsigned int _SIGMA = 5;
-const unsigned int _LAMBDA = 20; // for moon with 47 only segmentation
+const unsigned int _SIGMA = 2;
+const unsigned int _LAMBDA = 0; // for moon with 47 only segmentation
 
+bool maxFlowInitalComputed = false;
+//unsigned int bkgTimes = 0;
+//unsigned int objTimes = 0;
 
-// std::pair <wxPoint, 
 vector <int> bkgDots;
 vector <int> objDots;
 int maxProb = 0;
@@ -122,7 +124,6 @@ double bValue(Vertex* p, Vertex* q, int sigma = _SIGMA, int dist = 1)
 // To represent a flow network
 class Graph
 {
-    int V; // No. of vertices
     int E; // No. of edges 
 
     vector<Vertex> ver;
@@ -147,6 +148,8 @@ class Graph
     void updateReverseEdgeFlow(int uAdj, int i, double flow);
 
 public:
+
+    int V; // No. of vertices
 
     Graph(int V) : objHist(nullptr), bkgHist(nullptr), probabilityValueMax(0){
         this->V = V;
@@ -180,8 +183,8 @@ public:
         int index = findEdge(u, v);
         if (index == -1) // there is no u<->v in adj list 
         {
-            adj[u].push_back(Edge(0, capacity, u, v));
-            adj[v].push_back(Edge(0, capacity, v, u));
+            adj[u].push_back(Edge(capacity, capacity, u, v));
+            adj[v].push_back(Edge(capacity, capacity, v, u));
 
             (adj[u][adj[u].size() - 1]).pair = adj[v].size() - 1;
             (adj[v][adj[v].size() - 1]).pair = adj[u].size() - 1;
@@ -189,6 +192,18 @@ public:
             E += 1; // as in non-directed graph
 
         }
+    }
+
+    void updateEdge(int u)
+    {
+        int lastPos = adj[u + 1].size() - 1;
+        double cP = adj[u + 1][lastPos-1].flow + adj[u + 1][lastPos].flow; // 1 - with Source, 2 - with Sink
+
+        adj[u + 1][lastPos - 1].capacity = 1 + ver[u + 1].maxB + cP; // with source
+        adj[0][adj[u + 1][lastPos - 1].pair].capacity = 1 + ver[u + 1].maxB + cP;;
+
+        adj[u + 1][lastPos].capacity = cP; // with sink
+        adj[V - 1][adj[u + 1][lastPos].pair].capacity = cP;
     }
 
     // Return number in adj[u] for edge u->v
@@ -213,6 +228,7 @@ public:
 
     void Init(int numColumn, int numRow, unsigned char* imageArray);
     void contactWithTerminals();
+    //void recompute(int area);
 
     std::unique_ptr<Histogram> objHist;
     std::unique_ptr<Histogram> bkgHist;
@@ -413,7 +429,7 @@ void Graph::contactWithTerminals()
         else if (ver[i].label == 1) // bkg dot
         {
             addEdge(i, source, 0);
-            addEdge(i, sink, 1 + ver[i].maxB);
+            addEdge(i, sink, 1 + ver[i].maxB); // 1 + ver[i].maxB == K
         }
         else // unknown dot
         {
@@ -422,6 +438,22 @@ void Graph::contactWithTerminals()
         }
     }
 }
+
+/*void Graph::recompute(int area) // 0 - obj, 1 - bkg
+{
+    if (area)
+    {
+        for (int i = 0; i < bkgDots[bkgTimes - 1].size(); ++i)
+        {
+            addEdge(i, 0, probabilityValue(ver[i].depth, 1)); // bkg
+            addEdge(i, V-1, probabilityValue(ver[i].depth, 0));   // obj
+        }
+    }
+    else
+    {
+
+    }
+}*/
 
 
 double Graph::probabilityValue(int depth, int area, int lambda) // area: 0 - obj, bkg - 1; int lambda = 50
@@ -448,7 +480,6 @@ double Graph::probabilityValue(int depth, int area, int lambda) // area: 0 - obj
         return -lambda * log(probObj / sumProb);
     }
 }
-
 
 void Graph::preprocess(int s)
 {
@@ -755,6 +786,7 @@ public:
     void OnLeftUp(wxMouseEvent& event);    
     
     void OnRightDown(wxMouseEvent& event);
+    void OnRightUp(wxMouseEvent& event);
 
 protected:
     bool isLeftDown;
@@ -783,6 +815,7 @@ BEGIN_EVENT_TABLE(MyCanvas, wxPanel)
     EVT_LEFT_DOWN(MyCanvas::OnLeftDown)
     EVT_LEFT_UP(MyCanvas::OnLeftUp)
     EVT_RIGHT_DOWN(MyCanvas::OnRightDown)
+    EVT_RIGHT_UP(MyCanvas::OnRightUp)
     EVT_MOTION(MyCanvas::OnLeftMove)
 END_EVENT_TABLE()
 
@@ -871,13 +904,17 @@ void MyCanvas::ProcessImage()
 {
 	long int i = m_imageWidth * m_imageHeight * 3;
 
-    p_V->computeHistogram();
-    p_V->contactWithTerminals();
+    if (!maxFlowInitalComputed)
+    {
+        p_V->computeHistogram();
+        p_V->contactWithTerminals();
+    }
 
 
 auto start = chrono::high_resolution_clock::now();
 
     st1->SetLabel(wxString::Format(wxT("MaxFlow = %f"), p_V->getMaxFlow(0)));      
+    maxFlowInitalComputed = true;
 
 auto end = chrono::high_resolution_clock::now();
 double time_taken =
@@ -937,6 +974,7 @@ void MyCanvas::OnPaint(wxPaintEvent& WXUNUSED(event))
 //The left mouse button movement event processing
 void MyCanvas::OnLeftMove(wxMouseEvent& event)
 {
+    int verPos = 0;
     if (isLeftDown && event.Dragging()) {
         wxPoint mPos = event.GetPosition();
         wxClientDC dc(this);
@@ -944,22 +982,29 @@ void MyCanvas::OnLeftMove(wxMouseEvent& event)
         dc.DrawLine(mPos, penPos);
         dc.SetPen(wxNullPen);
         penPos = mPos;
-        p_V->setLabelVertex(penPos.y * m_imageWidth + penPos.x + 1, 0);
-        objDots.push_back(m_myImage[3 * (penPos.y * m_imageWidth + penPos.x)]);
         st1->SetLabel(wxString::Format(wxT("x: %d"), penPos.x));
         st2->SetLabel(wxString::Format(wxT("y: %d"), penPos.y));
+        verPos = penPos.y * m_imageWidth + penPos.x;
+        p_V->setLabelVertex(verPos + 1, 0);
+        if (!maxFlowInitalComputed) { objDots.push_back(m_myImage[3 * verPos]); }
+        else  { p_V->updateEdge(verPos); } // obj 
     }
     else if (isRightDown && event.Dragging()) {
-        wxPoint mPos = event.GetPosition();
-        wxClientDC dc(this);
-        dc.SetPen(*wxBLACK_PEN);
-        dc.DrawLine(mPos, penPos);
-        dc.SetPen(wxNullPen);
-        penPos = mPos;
-        p_V->setLabelVertex(penPos.y * m_imageWidth + penPos.x + 1, 1);
-        bkgDots.push_back(m_myImage[3 * (penPos.y * m_imageWidth + penPos.x)]);
-        st1->SetLabel(wxString::Format(wxT("x: %d"), penPos.x));
-        st2->SetLabel(wxString::Format(wxT("y: %d"), penPos.y));
+        if (!maxFlowInitalComputed)
+        {
+            wxPoint mPos = event.GetPosition();
+            wxClientDC dc(this);
+            dc.SetPen(*wxBLACK_PEN);
+            dc.DrawLine(mPos, penPos);
+            dc.SetPen(wxNullPen);
+            penPos = mPos;
+            st1->SetLabel(wxString::Format(wxT("x: %d"), penPos.x));
+            st2->SetLabel(wxString::Format(wxT("y: %d"), penPos.y));
+            verPos = penPos.y * m_imageWidth + penPos.x;
+        
+            p_V->setLabelVertex(verPos + 1, 1);
+            bkgDots.push_back(m_myImage[3 * verPos]);
+        }
     }
 }
 
@@ -981,6 +1026,12 @@ void MyCanvas::OnRightDown(wxMouseEvent& event)
 void MyCanvas::OnLeftUp(wxMouseEvent& event)
 {
     isLeftDown = false;
+    if (maxFlowInitalComputed) ProcessImage(); // for object
+}
+
+void MyCanvas::OnRightUp(wxMouseEvent& event)
+{
+    isRightDown = true;
 }
 
 
