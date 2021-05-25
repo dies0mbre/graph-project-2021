@@ -107,7 +107,7 @@ struct Vertex
 {
     int name, h, depth, pixelX, pixelY, label;
     // label = 0-object, 1-bkg, 2-unknown
-    double maxB, e_flow;
+    double e_flow;
 
     Vertex(int name, int h, double e_flow, int x, int y, int label = 2, int depth = -1) :
        name(name),  h(h), e_flow(e_flow), depth(depth), pixelX(x), pixelY(y), label(label) {}
@@ -133,6 +133,7 @@ class Graph
     queue <Vertex*> active;
 
     double probabilityValueMax;
+    double maxB;
 
     // Function to push excess flow from u
     bool push(int u);
@@ -151,7 +152,7 @@ public:
 
     int V; // No. of vertices
 
-    Graph(int V) : objHist(nullptr), bkgHist(nullptr), probabilityValueMax(0){
+    Graph(int V) : objHist(nullptr), bkgHist(nullptr), probabilityValueMax(0), maxB(0.0){
         this->V = V;
         this->E = 0;
 
@@ -204,13 +205,13 @@ public:
             adj[u + 1][lastPos - 1].capacity = cP; // with source
             adj[0][adj[u + 1][lastPos - 1].pair].capacity = cP;
 
-            adj[u + 1][lastPos].capacity = 1 + ver[u + 1].maxB + cP; // with sink
-            adj[V - 1][adj[u + 1][lastPos].pair].capacity = 1 + ver[u + 1].maxB + cP;;
+            adj[u + 1][lastPos].capacity = 1 + maxB + cP; // with sink
+            adj[V - 1][adj[u + 1][lastPos].pair].capacity = 1 + maxB + cP;;
         }
         else // obj
         {
-            adj[u + 1][lastPos - 1].capacity = 1 + ver[u + 1].maxB + cP; // with source
-            adj[0][adj[u + 1][lastPos - 1].pair].capacity = 1 + ver[u + 1].maxB + cP;;
+            adj[u + 1][lastPos - 1].capacity = 1 + maxB + cP; // with source
+            adj[0][adj[u + 1][lastPos - 1].pair].capacity = 1 + maxB + cP;;
 
             adj[u + 1][lastPos].capacity = cP; // with sink
             adj[V - 1][adj[u + 1][lastPos].pair].capacity = cP;
@@ -305,7 +306,7 @@ void Graph::Init(int numColumn, int numRow, unsigned char* imageArray)
                     ver[nD+1].depth = imageArray[3 * nD];
                     bValues.push_back(bValue(&ver[verPosition], &ver[nS + 1]));
                     bValues.push_back(bValue(&ver[verPosition], &ver[nD + 1]));
-                    ver[verPosition].maxB = *max_element(begin(bValues), end(bValues));
+                    maxB = maxB < *max_element(begin(bValues), end(bValues)) ? *max_element(begin(bValues), end(bValues)) : maxB;
                     addEdge(verPosition, nS + 1, bValues[0]);
                     addEdge(verPosition, nD + 1, bValues[1]);
                     bValues.clear();
@@ -316,7 +317,7 @@ void Graph::Init(int numColumn, int numRow, unsigned char* imageArray)
                     ver[nS + 1].depth = imageArray[3 * nS];
                     bValues.push_back(bValue(&ver[verPosition], &ver[nA + 1]));
                     bValues.push_back(bValue(&ver[verPosition], &ver[nS + 1]));
-                    ver[verPosition].maxB = *max_element(begin(bValues), end(bValues));
+                    maxB = maxB < *max_element(begin(bValues), end(bValues)) ? *max_element(begin(bValues), end(bValues)) : maxB;
                     addEdge(verPosition, nA + 1, bValues[0]);
                     addEdge(verPosition, nS + 1, bValues[1]);
                     bValues.clear();
@@ -329,7 +330,7 @@ void Graph::Init(int numColumn, int numRow, unsigned char* imageArray)
                     bValues.push_back(bValue(&ver[verPosition], &ver[nA + 1]));
                     bValues.push_back(bValue(&ver[verPosition], &ver[nD + 1]));
                     bValues.push_back(bValue(&ver[verPosition], &ver[nS + 1]));
-                    ver[verPosition].maxB = *max_element(begin(bValues), end(bValues));
+                    maxB = maxB < *max_element(begin(bValues), end(bValues)) ? *max_element(begin(bValues), end(bValues)) : maxB;
                     addEdge(verPosition, nA + 1, bValues[0]);
                     addEdge(verPosition, nD + 1, bValues[1]);
                     addEdge(verPosition, nS + 1, bValues[2]);
@@ -344,7 +345,7 @@ void Graph::Init(int numColumn, int numRow, unsigned char* imageArray)
                     ver[nW + 1].depth = imageArray[3 * nW];
                     bValues.push_back(bValue(&ver[verPosition], &ver[nD + 1]));
                     bValues.push_back(bValue(&ver[verPosition], &ver[nW + 1]));
-                    ver[verPosition].maxB = *max_element(begin(bValues), end(bValues));
+                    maxB = maxB < *max_element(begin(bValues), end(bValues)) ? *max_element(begin(bValues), end(bValues)) : maxB;
                     addEdge(verPosition, nD + 1, bValues[0]);
                     addEdge(verPosition, nW + 1, bValues[1]);
                     bValues.clear();
@@ -355,7 +356,7 @@ void Graph::Init(int numColumn, int numRow, unsigned char* imageArray)
                     ver[nW + 1].depth = imageArray[3 * nW];
                     bValues.push_back(bValue(&ver[verPosition], &ver[nA + 1]));
                     bValues.push_back(bValue(&ver[verPosition], &ver[nW + 1]));
-                    ver[verPosition].maxB = *max_element(begin(bValues), end(bValues));
+                    maxB = maxB < *max_element(begin(bValues), end(bValues)) ? *max_element(begin(bValues), end(bValues)) : maxB;
                     addEdge(verPosition, nA + 1, bValues[0]);
                     addEdge(verPosition, nW + 1, bValues[1]);
                     bValues.clear();
@@ -368,7 +369,7 @@ void Graph::Init(int numColumn, int numRow, unsigned char* imageArray)
                     bValues.push_back(bValue(&ver[verPosition], &ver[nA + 1]));
                     bValues.push_back(bValue(&ver[verPosition], &ver[nD + 1]));
                     bValues.push_back(bValue(&ver[verPosition], &ver[nW + 1]));
-                    ver[verPosition].maxB = *max_element(begin(bValues), end(bValues));
+                    maxB = maxB < *max_element(begin(bValues), end(bValues)) ? *max_element(begin(bValues), end(bValues)) : maxB;
                     addEdge(verPosition, nA + 1, bValues[0]);
                     addEdge(verPosition, nD + 1, bValues[1]);
                     addEdge(verPosition, nW + 1, bValues[2]);
@@ -382,7 +383,7 @@ void Graph::Init(int numColumn, int numRow, unsigned char* imageArray)
                 bValues.push_back(bValue(&ver[verPosition], &ver[nS + 1]));
                 bValues.push_back(bValue(&ver[verPosition], &ver[nD + 1]));
                 bValues.push_back(bValue(&ver[verPosition], &ver[nW + 1]));
-                ver[verPosition].maxB = *max_element(begin(bValues), end(bValues));
+                maxB = maxB < *max_element(begin(bValues), end(bValues)) ? *max_element(begin(bValues), end(bValues)) : maxB;
                 addEdge(verPosition, nS + 1, bValues[0]);
                 addEdge(verPosition, nD + 1, bValues[1]);
                 addEdge(verPosition, nW + 1, bValues[2]);
@@ -395,7 +396,7 @@ void Graph::Init(int numColumn, int numRow, unsigned char* imageArray)
                 bValues.push_back(bValue(&ver[verPosition], &ver[nA + 1]));
                 bValues.push_back(bValue(&ver[verPosition], &ver[nW + 1]));
                 bValues.push_back(bValue(&ver[verPosition], &ver[nS + 1]));
-                ver[verPosition].maxB = *max_element(begin(bValues), end(bValues));
+                maxB = maxB < *max_element(begin(bValues), end(bValues)) ? *max_element(begin(bValues), end(bValues)) : maxB;
                 addEdge(verPosition, nA + 1, bValues[0]);
                 addEdge(verPosition, nW + 1, bValues[1]);
                 addEdge(verPosition, nS + 1, bValues[2]);
@@ -410,7 +411,7 @@ void Graph::Init(int numColumn, int numRow, unsigned char* imageArray)
                 bValues.push_back(bValue(&ver[verPosition], &ver[nW + 1]));
                 bValues.push_back(bValue(&ver[verPosition], &ver[nS + 1]));
                 bValues.push_back(bValue(&ver[verPosition], &ver[nD + 1]));
-                ver[verPosition].maxB = *max_element(begin(bValues), end(bValues));
+                maxB = maxB < *max_element(begin(bValues), end(bValues)) ? *max_element(begin(bValues), end(bValues)) : maxB;
                 addEdge(verPosition, nA + 1, bValues[0]);
                 addEdge(verPosition, nW + 1, bValues[1]);
                 addEdge(verPosition, nS + 1, bValues[2]);
@@ -433,13 +434,13 @@ void Graph::contactWithTerminals()
     {
         if (ver[i].label == 0) // obj dot
         {
-            addEdge(i, source, 1 + ver[i].maxB);
+            addEdge(i, source, 1 + maxB);
             addEdge(i, sink, 0);
         }
         else if (ver[i].label == 1) // bkg dot
         {
             addEdge(i, source, 0);
-            addEdge(i, sink, 1 + ver[i].maxB); // 1 + ver[i].maxB == K
+            addEdge(i, sink, 1 + maxB); // 1 + ver[i].maxB == K
         }
         else // unknown dot
         {
