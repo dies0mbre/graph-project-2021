@@ -41,9 +41,9 @@ using std::ifstream;
 #define APP_NAME "Image Segmentation"
 
 unsigned int _SIGMA = 2;
-unsigned int _LAMBDA = 0;
+unsigned int _LAMBDA = 60;
 
-const bool _METRICS = false; // true for testing metrics
+const bool _METRICS = true; // true for testing metrics
 
 bool maxFlowInitalComputed = false;
 //unsigned int bkgTimes = 0;
@@ -56,8 +56,8 @@ int maxProb = 0;
 double firstMetric(unsigned char* frame1, unsigned char* frame2)
 {
     unsigned int correct = 0;
-    int w = 640;
-    int h = 480;
+    int w = 608;
+    int h = 511;
 
     int intensity1, intensity2;
 
@@ -81,8 +81,8 @@ double jaccardMetric(unsigned char* frame1, unsigned char* frame2) // for object
     unsigned int intersect = 0;
     unsigned int unionsect = 0;
 
-    int w = 640;
-    int h = 480;
+    int w = 608;
+    int h = 511;
 
     int intensity1, intensity2;
 
@@ -937,10 +937,10 @@ void MyCanvas::LoadImage(wxString fileName)
     else
     {
         ofstream log;
-        log.open("test_banana3.txt", std::ios_base::app);
+        log.open("param_test1.txt", std::ios_base::app);
 
-        vector<unsigned int> sigmas = { 1, 10, 20, 30, 40, 50, 60, 70, 80, 90, 100 };
-        vector <unsigned int> lambdas = { 0, 10, 20, 30, 40, 50, 60, 70, 80, 90, 100 };
+        vector<unsigned int> sigmas = {110, 120, 140, 250}; //  1, 2, 3, 4, 10, 20, 40, 50, 60, 80, 100    };
+        vector <unsigned int> lambdas = { 0, 1, 2, 3, 4, 5, 10, 20, 30, 40, 50, 60 };
 
         for (unsigned int sigma : sigmas)
         {
@@ -951,16 +951,16 @@ void MyCanvas::LoadImage(wxString fileName)
 
                 m_myImage = (unsigned char*)malloc(m_imageWidth * m_imageHeight * 3);
                 memcpy(m_myImage, m_imageRGB->GetData(), m_imageWidth * m_imageHeight * 3);
-                st1->SetLabel(wxString::Format(wxT("m_imageWidth = %d"), m_imageWidth));
-                st2->SetLabel(wxString::Format(wxT("m_imageHeight = %d"), m_imageHeight));
+                st1->SetLabel(wxString::Format(wxT("sigma = %d"), sigma));
+                st2->SetLabel(wxString::Format(wxT("lambda = %d"), lambda));
 
 
                 p_V = std::make_unique<Graph>(m_imageWidth * m_imageHeight + 2);
                 p_V->Init(m_imageWidth, m_imageHeight, m_myImage);
-                st2->SetLabel(wxString::Format(wxT("V = %d"), p_V->getV()));
+                //st2->SetLabel(wxString::Format(wxT("V = %d"), p_V->getV()));
 
                 int n, m, x, y, c, verPos;
-                ifstream bkgfile("C:\\Users\\Asus\\CLionProjects\\study\\graphProject\\bkg_banana3.txt");
+                ifstream bkgfile("C:\\Users\\Asus\\CLionProjects\\study\\graphProject\\bkg_test.txt");
                 bkgfile >> n >> m;
                 while (bkgfile >> x >> y >> c)
                 {
@@ -969,7 +969,7 @@ void MyCanvas::LoadImage(wxString fileName)
                     bkgDots.push_back(m_myImage[3 * verPos]);
                 }
 
-                ifstream objfile("C:\\Users\\Asus\\CLionProjects\\study\\graphProject\\obj_banana3.txt");
+                ifstream objfile("C:\\Users\\Asus\\CLionProjects\\study\\graphProject\\obj_test.txt");
                 objfile >> n >> m;
                 while (objfile >> x >> y >> c)
                 {
@@ -991,7 +991,7 @@ void MyCanvas::LoadImage(wxString fileName)
                     chrono::duration_cast<chrono::nanoseconds>(end - start).count();
 
                 time_taken *= 1e-9;
-                st2->SetLabel(wxString::Format(wxT("Time MF: %f"), time_taken));
+                //st2->SetLabel(wxString::Format(wxT("Time MF: %f"), time_taken));
 
                 vector <Vertex*> mincut;
                 p_V->minCut(mincut);
@@ -1014,11 +1014,12 @@ void MyCanvas::LoadImage(wxString fileName)
                 }
 
 
-                wxImage* ideal_imageRGB = new wxImage("C:\\Users\\Asus\\CLionProjects\\study\\graphProject\\results\\banana3.bmp", wxBITMAP_TYPE_ANY, -1);
+                wxImage* ideal_imageRGB = new wxImage("C:\\Users\\Asus\\CLionProjects\\study\\graphProject\\test_ideal.bmp", wxBITMAP_TYPE_ANY, -1);
                 unsigned char* ideal_myImage = (unsigned char*)malloc(m_imageWidth * m_imageHeight * 3);
                 memcpy(ideal_myImage, ideal_imageRGB->GetData(), ideal_imageRGB->GetWidth() * ideal_imageRGB->GetHeight() * 3);
 
                 log << _SIGMA << " " << _LAMBDA << " " << firstMetric(m_myImage, ideal_myImage) << " " << jaccardMetric(m_myImage, ideal_myImage) << "\n";
+
             }
         }
 
@@ -1139,7 +1140,7 @@ void MyCanvas::OnLeftMove(wxMouseEvent& event)
         p_V->setLabelVertex(verPos + 1, 0);
 
         /*ofstream log;
-        log.open("obj_banana3.txt", std::ios_base::app);
+        log.open("obj_test.txt", std::ios_base::app);
         log << penPos.x << " " << penPos.y << " " << int(m_myImage[3 * verPos]) << "\n";
         log.close();*/
 
@@ -1160,7 +1161,7 @@ void MyCanvas::OnLeftMove(wxMouseEvent& event)
         p_V->setLabelVertex(verPos + 1, 1);
 
         /*ofstream log;
-        log.open("bkg_banana3.txt", std::ios_base::app);
+        log.open("bkg_test.txt", std::ios_base::app);
         log << penPos.x << " " << penPos.y << " " << int(m_myImage[3 * verPos]) << "\n";
         log.close();*/
 
