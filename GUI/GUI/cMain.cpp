@@ -40,8 +40,10 @@ using std::min;
 using std::ifstream;
 #define APP_NAME "Image Segmentation"
 
-const unsigned int _SIGMA = 2;
-const unsigned int _LAMBDA = 0; // for moon with 47 only segmentation
+unsigned int _SIGMA = 2;
+unsigned int _LAMBDA = 0;
+
+const bool _METRICS = false; // true for testing metrics
 
 bool maxFlowInitalComputed = false;
 //unsigned int bkgTimes = 0;
@@ -51,6 +53,56 @@ vector <int> bkgDots;
 vector <int> objDots;
 int maxProb = 0;
 
+double firstMetric(unsigned char* frame1, unsigned char* frame2)
+{
+    unsigned int correct = 0;
+    int w = 640;
+    int h = 480;
+
+    int intensity1, intensity2;
+
+    for (int i = 0; i < h; i++)
+    {
+        for (int j = 0; j < w; j++)
+        {
+            // for a single channel grey scale image
+            intensity1 = frame1[i * w + j];
+            intensity2 = frame2[i * w + j];
+            if (intensity1 == intensity2) correct += 1;
+        }
+    }
+    //cout << "correct: " << correct << endl;
+    //cout << "all: " << frame1->cols * frame1->rows << endl;
+    return correct / double(w*h);
+}
+
+double jaccardMetric(unsigned char* frame1, unsigned char* frame2) // for object 
+{
+    unsigned int intersect = 0;
+    unsigned int unionsect = 0;
+
+    int w = 640;
+    int h = 480;
+
+    int intensity1, intensity2;
+
+    for (int i = 0; i < h; i++)
+    {
+        for (int j = 0; j < w; j++)
+        {
+            // for a single channel grey scale image
+            intensity1 = frame1[i * w + j];
+            intensity2 = frame2[i * w + j];
+            if (intensity1 == intensity2 && intensity2 == 255) intersect += 1;
+            if (intensity1 == 255 || intensity2 == 255) unionsect += 1;
+        }
+    }
+
+    //cout << "\nintersect: " << intersect << endl;
+    //cout << "unionsect: " << unionsect << endl;
+    //cout << "all:       " << frame1->cols * frame1->rows << endl;
+    return intersect / double(unionsect);
+}
 
 struct Histogram
 {
@@ -859,17 +911,121 @@ void MyCanvas::LoadImage(wxString fileName)
 	m_imageWidth = m_imageRGB->GetWidth();
 	m_imageHeight = m_imageRGB->GetHeight();
 
-	m_myImage = (unsigned char*)malloc(m_imageWidth * m_imageHeight * 3);
-	memcpy(m_myImage, m_imageRGB->GetData(), m_imageWidth * m_imageHeight * 3);
-    st1->SetLabel(wxString::Format(wxT("m_imageWidth = %d"), m_imageWidth));
-    st2->SetLabel(wxString::Format(wxT("m_imageHeight = %d"), m_imageHeight));
+	//m_myImage = (unsigned char*)malloc(m_imageWidth * m_imageHeight * 3);
+	//memcpy(m_myImage, m_imageRGB->GetData(), m_imageWidth * m_imageHeight * 3);
+    //st1->SetLabel(wxString::Format(wxT("m_imageWidth = %d"), m_imageWidth));
+    //st2->SetLabel(wxString::Format(wxT("m_imageHeight = %d"), m_imageHeight));
+
 
     /*
     Initialization of graph.
     */
-    p_V = std::make_unique<Graph>(m_imageWidth* m_imageHeight + 2); //+2 for sink and source
-    p_V->Init(m_imageWidth, m_imageHeight, m_myImage);
-    st2->SetLabel(wxString::Format(wxT("V = %d"), p_V->getV()));
+    //p_V = std::make_unique<Graph>(m_imageWidth* m_imageHeight + 2); //+2 for sink and source
+
+    if (!_METRICS)
+    {
+        m_myImage = (unsigned char*)malloc(m_imageWidth * m_imageHeight * 3);
+        memcpy(m_myImage, m_imageRGB->GetData(), m_imageWidth * m_imageHeight * 3);
+        st1->SetLabel(wxString::Format(wxT("m_imageWidth = %d"), m_imageWidth));
+        st2->SetLabel(wxString::Format(wxT("m_imageHeight = %d"), m_imageHeight));
+
+        p_V = std::make_unique<Graph>(m_imageWidth * m_imageHeight + 2); //+2 for sink and source
+        p_V->Init(m_imageWidth, m_imageHeight, m_myImage);
+        st2->SetLabel(wxString::Format(wxT("V = %d"), p_V->getV()));
+
+    }
+    else
+    {
+        ofstream log;
+        log.open("test_banana3.txt", std::ios_base::app);
+
+        vector<unsigned int> sigmas = { 1, 10, 20, 30, 40, 50, 60, 70, 80, 90, 100 };
+        vector <unsigned int> lambdas = { 0, 10, 20, 30, 40, 50, 60, 70, 80, 90, 100 };
+
+        for (unsigned int sigma : sigmas)
+        {
+            for (unsigned int lambda : lambdas)
+            {
+                _SIGMA = sigma;
+                _LAMBDA = lambda;
+
+                m_myImage = (unsigned char*)malloc(m_imageWidth * m_imageHeight * 3);
+                memcpy(m_myImage, m_imageRGB->GetData(), m_imageWidth * m_imageHeight * 3);
+                st1->SetLabel(wxString::Format(wxT("m_imageWidth = %d"), m_imageWidth));
+                st2->SetLabel(wxString::Format(wxT("m_imageHeight = %d"), m_imageHeight));
+
+
+                p_V = std::make_unique<Graph>(m_imageWidth * m_imageHeight + 2);
+                p_V->Init(m_imageWidth, m_imageHeight, m_myImage);
+                st2->SetLabel(wxString::Format(wxT("V = %d"), p_V->getV()));
+
+                int n, m, x, y, c, verPos;
+                ifstream bkgfile("C:\\Users\\Asus\\CLionProjects\\study\\graphProject\\bkg_banana3.txt");
+                bkgfile >> n >> m;
+                while (bkgfile >> x >> y >> c)
+                {
+                    verPos = y * n + x;
+                    p_V->setLabelVertex(verPos + 1, 1);
+                    bkgDots.push_back(m_myImage[3 * verPos]);
+                }
+
+                ifstream objfile("C:\\Users\\Asus\\CLionProjects\\study\\graphProject\\obj_banana3.txt");
+                objfile >> n >> m;
+                while (objfile >> x >> y >> c)
+                {
+                    verPos = y * n + x;
+                    p_V->setLabelVertex(verPos + 1, 0);
+                    objDots.push_back(m_myImage[3 * verPos]);
+                }
+
+                p_V->computeHistogram();
+                p_V->contactWithTerminals();
+
+                auto start = chrono::high_resolution_clock::now();
+
+                st1->SetLabel(wxString::Format(wxT("MaxFlow = %f"), p_V->getMaxFlow(0)));
+                maxFlowInitalComputed = true;
+
+                auto end = chrono::high_resolution_clock::now();
+                double time_taken =
+                    chrono::duration_cast<chrono::nanoseconds>(end - start).count();
+
+                time_taken *= 1e-9;
+                st2->SetLabel(wxString::Format(wxT("Time MF: %f"), time_taken));
+
+                vector <Vertex*> mincut;
+                p_V->minCut(mincut);
+                st3->SetLabel(wxString::Format(wxT("mincut : %d/%d"), mincut.size(), p_V->getV()));
+
+
+                int label = 2;
+                int position = 0;
+
+                for (unsigned int j = 0; j < m_imageHeight; ++j)
+                {
+                    for (unsigned int k = 0; k < m_imageWidth; ++k)
+                    {
+                        position = m_imageWidth * j + k;
+                        label = p_V->getLabel(position + 1);
+                        m_myImage[3 * position] = label == 0 ? 255 : 0;
+                        m_myImage[3 * position + 1] = label == 0 ? 255 : 0;
+                        m_myImage[3 * position + 2] = label == 0 ? 255 : 0;
+                    }
+                }
+
+
+                wxImage* ideal_imageRGB = new wxImage("C:\\Users\\Asus\\CLionProjects\\study\\graphProject\\results\\banana3.bmp", wxBITMAP_TYPE_ANY, -1);
+                unsigned char* ideal_myImage = (unsigned char*)malloc(m_imageWidth * m_imageHeight * 3);
+                memcpy(ideal_myImage, ideal_imageRGB->GetData(), ideal_imageRGB->GetWidth() * ideal_imageRGB->GetHeight() * 3);
+
+                log << _SIGMA << " " << _LAMBDA << " " << firstMetric(m_myImage, ideal_myImage) << " " << jaccardMetric(m_myImage, ideal_myImage) << "\n";
+            }
+        }
+
+        log.close();
+    }
+
+    
 
 	// update GUI size
 	SetSize(m_imageWidth, m_imageHeight);
@@ -982,6 +1138,11 @@ void MyCanvas::OnLeftMove(wxMouseEvent& event)
         verPos = penPos.y * m_imageWidth + penPos.x;
         p_V->setLabelVertex(verPos + 1, 0);
 
+        /*ofstream log;
+        log.open("obj_banana3.txt", std::ios_base::app);
+        log << penPos.x << " " << penPos.y << " " << int(m_myImage[3 * verPos]) << "\n";
+        log.close();*/
+
         if (!maxFlowInitalComputed) { objDots.push_back(m_myImage[3 * verPos]); }
         else  { p_V->updateEdge(verPos, 0); } // obj 
     }
@@ -997,6 +1158,11 @@ void MyCanvas::OnLeftMove(wxMouseEvent& event)
         st2->SetLabel(wxString::Format(wxT("y: %d"), penPos.y));
         verPos = penPos.y * m_imageWidth + penPos.x;
         p_V->setLabelVertex(verPos + 1, 1);
+
+        /*ofstream log;
+        log.open("bkg_banana3.txt", std::ios_base::app);
+        log << penPos.x << " " << penPos.y << " " << int(m_myImage[3 * verPos]) << "\n";
+        log.close();*/
 
         if (!maxFlowInitalComputed) { bkgDots.push_back(m_myImage[3 * verPos]); }
         else { p_V->updateEdge(verPos, 1); } // bkg 
