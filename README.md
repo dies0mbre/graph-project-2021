@@ -13,7 +13,7 @@
 4. Улучшение сегментации с помощью дополнения к исходной информации от пользователя
 
 ###  На основе статей
-- [BoyBoykov, Y. Y.; Jolly, M.-P. (2001): Interactive graph cuts for optimal boundary & region segmentation of objects in N-D images. ICCV 2001.](https://www.csd.uwo.ca/~yboykov/Papers/iccv01.pdf)
+- [Boykov, Y. Y.; Jolly, M.-P. (2001): Interactive graph cuts for optimal boundary & region segmentation of objects in N-D images. ICCV 2001.](https://www.csd.uwo.ca/~yboykov/Papers/iccv01.pdf)
 - [Boykov,   Yuri;   Funka-Lea,   Gareth   (2006):   Graph   Cuts   and   Efficient   N-D   Image Segmentation. Int J Comput Vision 70 (2), pp. 109–131.](https://www.csd.uwo.ca/~yboykov/Papers/ijcv06.pdf)
 
 
