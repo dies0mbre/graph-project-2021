@@ -41,9 +41,9 @@ using std::ifstream;
 #define APP_NAME "Image Segmentation"
 
 unsigned int _SIGMA = 2;
-unsigned int _LAMBDA = 60;
+unsigned int _LAMBDA = 0;
 
-const bool _METRICS = true; // true for testing metrics
+const bool _METRICS = false; // true for testing metrics
 
 bool maxFlowInitalComputed = false;
 //unsigned int bkgTimes = 0;
@@ -158,10 +158,10 @@ struct Edge
 struct Vertex
 {
     int name, h, depth, pixelX, pixelY, label;
-    // label = 0-object, 1-bkg, 2-unknown
     double e_flow;
 
-    Vertex(int name, int h, double e_flow, int x, int y, int label = 2, int depth = -1) :
+    Vertex(int name, int h, double e_flow, 
+        int x, int y, int label = 2, int depth = -1) :
        name(name),  h(h), e_flow(e_flow), depth(depth), pixelX(x), pixelY(y), label(label) {}
 };
 
@@ -1284,7 +1284,7 @@ void MyFrame::OnClose(wxCloseEvent& event)
 void MyFrame::OnAbout(wxCommandEvent& WXUNUSED(event))
 //------------------------------------------------------------------------
 {
-	wxMessageBox(_T("How to \n\n- load\n- display\n- process\n- save\n\nan image with wxWidgets (2.8.7)\n\nPascal Bertolino - GIPSA-lab, Grenoble - France\npascal.bertolino@gipsa-lab.fr"),
+	wxMessageBox(_T("Image Segmentation \n\n github.com/dies0mbre/"),
 		_T(APP_NAME), wxOK | wxICON_INFORMATION);
 }
 
